@@ -1,0 +1,30 @@
+#!/bin/bash
+
+echo "--- Shutting down all HSON Watchers ---"
+
+# Find all PID files created by hson_watcher
+PID_FILES=$(ls /tmp/hson_watcher_*.pid 2>/dev/null)
+
+if [ -z "$PID_FILES" ]; then
+    echo "No active watchers found."
+    exit 0
+fi
+
+for FILE in $PID_FILES; do
+    PID=$(cat "$FILE")
+    
+    # Check if process is actually running
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Terminating watcher group $PID..."
+        # Kill the entire process group (the '-' prefix)
+        # This closes the terminal window and the inotify process
+        kill -TERM -"$PID" 2>/dev/null
+    else
+        echo "Cleaning up stale PID file: $FILE"
+    fi
+    
+    # Remove the tracking file
+    rm -f "$FILE"
+done
+
+echo "Done. All watchers have been dismissed."

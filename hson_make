@@ -1,0 +1,694 @@
+#!/usr/bin/python3
+
+import re
+import sys
+import pathlib
+
+errors_found = False
+no_note_members = []
+trigger_strings = ['"config"','"config-delimiter"','"help"','"h"']
+trigger_strings_owners = ["ConfigFil","ConfigDelimiter","Help","Help"]
+
+includeVec = False
+includeString = False
+
+insidePrivate = False
+class Function:
+    def __init__(self,output,name,signature,body,comment=None,isPrivate=False):
+        self.Output = output
+        self.Name = name
+        self.Signature = signature
+        self.Body = body
+        self.Comment = comment
+        self.IsPrivate = isPrivate
+    def HeaderRender(self,idt):
+        global insidePrivate
+        s = ""
+        if self.IsPrivate:
+            if not insidePrivate:
+                s += "\tprivate:\n"
+                insidePrivate = True
+        else:
+            if insidePrivate:
+                s += "\tpublic:\n"
+                insidePrivate = False
+        if (self.Comment):
+            s+=f"//{self.Comment}\n"
+        s+= f"{idt}{self.Output} {self.Name}({self.Signature});\n"
+        return s
+    def SourceRender(self,obj):
+        s =  f"{self.Output} {obj.NameRoot}::{self.Name}({self.Signature})\n{{\n"
+        if (self.Body is not None):
+            s += self.Body(obj)
+        s += "}\n"
+        return s
+
+
+
+class Member:
+    def __init__(self,type,name,braces):
+        self.Name = name
+        self.fixType(type)
+
+        keywords = ["default", "trigger", "note"]
+        pattern = rf"\b({'|'.join(keywords)})\s*=\s*"
+
+        parts = re.split(pattern, braces.Text, flags=re.IGNORECASE)
+        
+        # parts[0] is everything before the first keyword (usually empty)
+        # Thereafter, it's [key, value, key, value...]
+        data = {k: None for k in keywords}
+        for i in range(1, len(parts), 2):
+            key = parts[i].lower().strip()
+            val = parts[i+1].strip()
+            if key in data:
+                data[key] = val
+
+        mandatory = ["default", "trigger"]
+        for k in mandatory:
+            if data[k] is None:
+                raise Exception(f"Mandatory keyword '{k}' missing in member '{self.Name}'")
+        self.fixKey(data["trigger"])
+        self.fixDefault(data["default"])
+
+        if data["note"] is None:
+            global no_note_members
+            no_note_members.append(self.Name)
+            self.Note = "\"\""
+        else:
+            self.fixNote(data["note"])
+
+    def Declaration(self):
+        return f"{self.Type} {self.Name} = {self.Default};"
+    def Parse(self):
+        return f"{self.Name} = JSL::Parameter<{self.Type}>({self.Name},{self.Key},argc,argv).Value();"
+    def Configure(self):
+        return f"{self.Name} = JSL::Parameter<{self.Type}>({self.Name},{self.Key},configFile,configDelimiter).Value();"
+    def LineParse(self):
+        return f"{self.Name} = JSL::Parameter<{self.Type}>({self.Name},{self.Key},linevec).Value();"
+    def fixType(self,t):
+        t = re.sub(r'(?<!std::)\bvector\b', 'std::vector', t)
+        t = re.sub(r'(?<!std::)\bstring\b', 'std::string', t)
+        self.Type = t
+        if self.Type == "std::string":
+            global includeString
+            includeString = True
+        if "vector" in self.Type:
+            global includeVec
+            includeVec = True
+    def fixNote(self,n):
+        if not n.startswith('"'):
+            n = "\"" + n
+        if not n.endswith('"'):
+            n = n + "\""
+        self.Note = n
+        
+    def fixKey(self,k):
+        if not k.startswith('"'):
+            k = "\"" + k
+        if not k.endswith('"'):
+            k = k + "\""
+        self.Key = k
+
+        global trigger_strings
+        global trigger_strings_owners
+        if self.Key in trigger_strings:
+            
+            idx = trigger_strings.index(self.Key)
+            raise Exception(f"The Trigger value assigned to {self.Name} ({self.Key}) is already assigned to {trigger_strings_owners[idx]}")
+        else:
+            trigger_strings.append(self.Key)
+            trigger_strings_owners.append(self.Name)
+    def fixDefault(self,d):
+        ##is this still needed with the new formatting?
+        if self.Type == "std::string" and not (d.startswith('"') or d.startswith("'")):
+            d =  f'"{d}"'
+        if "std::vector" in self.Type and not d.startswith('{'):
+            d = f'{{{d}}}'
+        self.Default = d
+
+class SettingsGroup:
+    def __init__(self,name,braces,isRoot):
+        self.Name = name.strip()
+        self.Root = isRoot
+
+        self.CheckGlobal()
+
+
+        self.Members=[]
+        self.Categories = []
+        self.LoadBraces(braces)
+    
+    def CheckGlobal(self):
+        self.IsGlobal = False
+        if ":" in self.Name:
+            s = str(self.Name).split(":")
+            s = [x for x in s if x] #filter out empty strings
+            if (len(s) != 2):
+                raise Exception(f"Colons are only allowed in group names when they demarcate a keyword.")
+            if (not self.Root):
+                raise Exception(f"Only top-level structures can be declared global. {s[0]} does not meet this criteria")
+            
+            if s[1].lower().strip() == "global":
+                self.IsGlobal = True
+                self.Name = s[0].strip() + "Object"
+                self.InstanceName = s[0].strip()
+    def AddMember(self,type_name,braces):
+        head = type_name.split(" ")
+        if len(head) <2:
+            raise Exception(f"No type specifier provided for member {head}")
+        name = head[-1]
+        type = " ".join(head[0:-1])
+        if len(head) >2:
+            allowed = ["signed","unsigned","long","int","double","short"]
+            for word in head[:-1]:
+                if word not in allowed:
+                    raise Exception(f"Warning: `{type}' has more than one word, and is not a part of the standard compound-type list")
+        self.Members.append(Member(type,name,braces))
+    def AddCategory(self,name,braces):
+        self.Categories.append(SettingsGroup(name,braces,False))
+
+    def LoadBraces(self,braces):
+        if braces.IsLeaf:
+            raise Exception(f"A dangling leaf was detected ({braces[i].Text})")
+        for i in range(len(braces.Headers)):
+            if braces.Headers[i].lower() == "members":
+                self.ParseMembers(braces.Content[i])
+            elif braces.Headers[i].lower() == "categories":
+                self.ParseCategory(braces.Content[i])
+            else:
+                raise Exception(f"Unknown group header {braces.Headers[i]}")
+    def ParseMembers(self,braces):
+        for i in range(len(braces.Headers)):
+            self.AddMember(braces.Headers[i],braces.Content[i])
+            
+    def ParseCategory(self,braces):
+        for i in range(len(braces.Headers)):
+            self.AddCategory(braces.Headers[i],braces.Content[i])
+
+    def MakeFunctions(self):
+        self.Functions = []
+        idt = "\t"
+
+
+        def parseFunc(obj):
+            s = ""
+            if obj.Root:
+                s +=f"{idt}//Special handling to trigger configuration or help\n"
+                s += f"{idt}std::string NULLFILE = \"__none__\";\n"
+                s += f"{idt}JSL::Parameter<std::string> ConfigureFile(JSL::internal::NULLFILE,\"config\",argc,argv);\n"
+                s += f"{idt}JSL::Parameter<std::string> ConfigureDelimiter(\" \",\"config-delimiter\",argc,argv);\n"
+                s += f"{idt}bool HelpRequested = JSL::Toggle(\"help\",argc,argv).Value() || JSL::Toggle(\"h\",argc,argv).Value();\n"
+                s += f"{idt}if (HelpRequested)\n{idt}{{\n{idt}\tMasterHelp();\n\t}}\n"
+                s += f"{idt}if (ConfigureFile.Value() != NULLFILE)\n{idt}{{\n{idt}\tConfigure(ConfigureFile.Value(),ConfigureDelimiter.Value());\n{idt}}}\n"
+            for member in obj.Members:
+                s+= f"{idt}{member.Parse()}\n"
+            for member in self.Categories:
+                s +=f"{idt}{member.SimpleName}.Parse(argc,argv);\n"
+            return s
+        self.Functions.append(
+            Function("void","Parse","int argc, char** argv",parseFunc)
+        )
+
+
+        def configFunc(obj):
+            s = ""
+            for member in obj.Members:
+                s+= f"{idt}{member.Configure()}\n"
+            for member in self.Categories:
+                s +=f"{idt}{member.SimpleName}.Configure(configFile,configDelimiter);\n"
+            return s
+        self.Functions.append(
+            Function("void","Configure","const std::string & configFile, std::string configDelimiter",configFunc)
+        )
+
+        def lineparseFunc(obj):
+            s = ""
+            for member in obj.Members:
+                s+= f"{idt}{member.LineParse()}\n"
+            for member in self.Categories:
+                s +=f"{idt}{member.SimpleName}.ParseLine(linevec);\n"
+            return s
+        self.Functions.append(
+            Function("void","ParseLine","const std::vector<std::string> & linevec",
+                    lineparseFunc,"\t\tUsed for single-pass parsings during runtime reconfig" )
+        )
+
+        def toTextFunc(obj):
+            s = ""
+            s += f"{idt}std::ostringstream s;\n"
+            for member in obj.Members:
+                q = member.Key[:-1]
+                q += " "
+                s += idt + f"s << {q + "\""} << JSL::MakeString({member.Name}) << \"\\n\";\n"
+            for category in self.Categories:
+                s += f"{idt}s << {category.Name}.ToText();\n"
+            s += f"{idt}return s.str();"
+            return s
+        self.Functions.append(
+            Function("std::string","ToText","",toTextFunc)
+        )
+
+        def makeHelp(obj):
+            s=""
+            for member in obj.Members:
+                helpDef = member.Default
+                if "vector" in member.Type:
+                    helpDef = f"({member.Type}){helpDef}"
+                s += f"{idt}help.AddMessage(\"{obj.NameRoot}\",{member.Key},{helpDef},\"{member.Name}\",{member.Note});\n"
+            for member in self.Categories:
+                s += f"{idt}{member.SimpleName}.Help(help);\n"
+            return s
+        
+        self.Functions.append(
+            Function("void","Help","JSL::HelpMessages & help",makeHelp)
+        )
+
+        querySignature = ["void","std::string parameter,std::vector<JSL::ParameterDescription> & found"]
+        prefix = ""
+        suffix = " "
+        if self.Root:
+            querySignature = ["std::vector<JSL::ParameterDescription>","std::string parameter"]
+            prefix += f"{idt}auto firstLetter = parameter.find_first_not_of('-');\n{idt}if (firstLetter != std::string::npos)\n{idt}{{\n{idt}\tparameter.erase(0, firstLetter);\n{idt}}}\n{idt}else\n{idt}{{\n{idt}\tparameter.clear();\n{idt}}}\n"
+            prefix += idt + "std::vector<JSL::ParameterDescription> found;\n"
+            suffix = f"{idt}return found;\n"
+        def makeQuery(obj):
+            s = prefix
+            for member in obj.Members:
+                s += f"{idt}JSL::ParameterDescription(\"{member.Name}\",\"{member.Type}\",{member.Key},{member.Name},({member.Type}){member.Default},{member.Note}).Query(parameter,found);\n"
+            for category in self.Categories:
+                s += f"{idt}{category.Name}.GetDescription(parameter,found);\n"
+            return s + suffix
+        self.Functions.append(
+            Function(querySignature[0],"GetDescription",querySignature[1],makeQuery)
+        )
+
+        ##special root only functions
+        if self.Root:
+            def saveFunc(obj):
+                s = f"{idt}auto contents = ToText();\n"
+                s += f"{idt}JSL::writeStringToFile(file,contents,std::ios::out);\n"
+                return s
+            self.Functions.append(
+                Function("void","SaveConfig","std::string file",saveFunc)
+            )
+
+            def masterHelp(obj):
+                s = f"\tJSL::HelpMessages help;\n"
+                s += f"\thelp.AddMessage(\"{obj.NameRoot}\",\"config\",\"__none__\",\"ConfigureFile\",\"When not equal to '__none__', the system will attempt to read this file in as a configuration file.\\nConfiguration files work the same as command line arguments, each line should contain a single flag and a value\\nIMPORTANT: Flags in config files omit the '-'\");\n"
+                s += f"\thelp.AddMessage(\"{obj.NameRoot}\",\"configure-delimiter\",\" \",\"ConfigureDelimiter\",\"The string which separates the flag from the values in the config file.\\nOnly the first instance of the flag is counted, subsequent occurrences are ignored.\");\n"
+                s += f"\thelp.AddMessage(\"{obj.NameRoot}\",\"h, --help\",false,\"Help\",\"When true, activates the help page, then exits\");\n"
+                s += "\tHelp(help);\n"
+                s += "\thelp.print();\n"
+                s += "\texit(0);\n"
+                return s
+
+            self.Functions.append(
+                Function("void","MasterHelp","",masterHelp,None,True)
+            )
+
+    def GenerateCpp(self,source,parent=None):
+        s = ""
+        if self.Root:
+            s += f"#include \"{source.name}\"\n\n"
+
+        for member in self.Categories:
+            s += member.GenerateCpp(source,self)
+
+        for function in self.Functions:
+            s += function.SourceRender(self)
+        return s
+
+    def GenerateHeader(self,parent=None):
+        self.MakeFunctions()
+        s = ""
+        if self.Root:
+            s += "/*\n\tThis header file was auto-generated from a .hson template\n\tWARNING: Do not make manual modifications, as they may be overwritten.\n*/\n"
+            s += "#pragma once\n"
+            s += "#include \"JSL/modules/Parameters/Parameter.h\"\n"
+            s += "#include \"JSL/modules/Parameters/Describer.h\"\n"
+            s += "#include \"JSL/modules/FileIO/fileWriters.h\"\n"
+            s += "#include <cstdlib>//for exit(0)\n"
+            if includeString:
+                s += "#include <string>\n"
+            if includeVec:
+                s += "#include <vector>\n"
+            
+        name = self.Name
+        
+        name_root = name.split(" ")[0]
+       
+        #detect namespaces
+        ns=""
+        needsClose = False
+        if "::" in name_root:
+            splitter = name_root.split("::")
+            ns = "::".join(splitter[:-1])
+            needsClose = True
+            s += f"namespace {ns} {{\n"
+            name_root = splitter[-1]
+        if not self.Root:
+            self.SimpleName = name_root
+            name_root = parent + "_" + name_root
+            self.FullName= name_root
+            if len(ns) != 0:
+                self.FullName = ns + "::" + name_root
+        self.NameRoot = name_root
+        ##have to do the members first
+        for cat in self.Categories:
+            s += cat.GenerateHeader(name_root) + "\n"
+        
+        #begin main class output
+        s += f"class {name_root}\n{{\n"
+        s += f"\tpublic:\n"
+        ## constructorz
+        s += f"\t\t{name_root}(){{}}\n"
+        s += f"\t\t{name_root}(int argc,char** argv){{Parse(argc,argv);}}\n"
+        
+        s += "\n"
+        ##member declarations
+        for member in self.Members:
+            s +=  "\t\t" + member.Declaration() + "\n"
+        for member in self.Categories:
+            s += f"\t\t{member.FullName} {member.SimpleName};\n"
+
+        s+= f"\n\t\t//default spaceship operator\n\t\tauto operator<=>(const {name_root}&) const = default;\n"
+        s += "\n\t\t//Comprehension functions\n"
+        idt = "\t\t"
+        for function in self.Functions:
+            s += function.HeaderRender(idt)
+
+     
+        # ##parsing
+        # s += "\t\tvoid Parse(int argc, char** argv)\n"
+        # s += "\t\t{\n"
+
+        # if self.Root:
+        #     s +="\t\t\t//Special handling to trigger configuration or help\n"
+        #     s += "\t\t\tstd::string NULLFILE = \"__none__\";\n"
+        #     s += "\t\t\tJSL::Parameter<std::string> ConfigureFile(JSL::internal::NULLFILE,\"config\",argc,argv);\n"
+        #     s += "\t\t\tJSL::Parameter<std::string> ConfigureDelimiter(\" \",\"config-delimiter\",argc,argv);\n"
+        #     s += "\t\t\tbool HelpRequested = JSL::Toggle(\"help\",argc,argv).Value() || JSL::Toggle(\"h\",argc,argv).Value();\n"
+        #     s += "\t\t\tif (HelpRequested)\n\t\t\t{\n\t\t\t\tMasterHelp();\n\t\t\t}\n"
+        #     s += "\t\t\tif (ConfigureFile.Value() != NULLFILE)\n\t\t\t{\n\t\t\t\tConfigure(ConfigureFile.Value(),ConfigureDelimiter.Value());\n\t\t\t}\n"
+
+        # for member in self.Members:
+        #     s += "\t\t\t" + member.Parse() + "\n"
+        # for member in self.Categories:
+        #     s += f"\t\t\t{member.SimpleName}.Parse(argc,argv);\n"
+        # s += "\t\t}\n"
+        # ##configuring
+        # s += "\t\tvoid Configure(const std::string & configFile, std::string configDelimiter)\n"
+        # s += "\t\t{\n"
+        # for member in self.Members:
+        #     s += "\t\t\t" + member.Configure() + "\n"
+        # for member in self.Categories:
+        #     s += f"\t\t\t{member.SimpleName}.Configure(configFile,configDelimiter);\n"
+        # s += "\t\t}\n"
+        # ##line parsing
+        # s += "\t\tvoid ParseLine(const std::vector<std::string> & linevec)\n"
+        # s += "\t\t{\n"
+        # for member in self.Members:
+        #     s += "\t\t\t" + member.LineParse() + "\n"
+        # for member in self.Categories:
+        #     s += f"\t\t\t{member.SimpleName}.ParseLine(linevec);\n"
+        # s += "\t\t}\n"
+
+        # ##equality check
+        # s += f"\t\tauto operator<=>(const {name_root}&) const = default;\n"
+        
+        # ## write to file
+        # idt = "\n\t\t\t"
+        # s += "\t\tstd::string ToText()\n\t\t{\n\t\t\tstd::ostringstream s;"
+        # for member in self.Members:
+        #     q = member.Key[:-1]
+        #     q += " "
+        #     s += idt + f"s << {q + "\""} << JSL::MakeString({member.Name}) << \"\\n\";"
+        # for category in self.Categories:
+        #     s += f"{idt}s << {category.Name}.ToText();"
+        # s += idt + "return s.str();"
+        # s+= "\n\t\t}"
+
+        # ##help message
+        # s += f"\n\t\tvoid Help(JSL::HelpMessages & help)\n\t\t{{\n"
+        # for member in self.Members:
+        #     helpDef = member.Default
+        #     if "vector" in member.Type:
+        #         helpDef = f"({member.Type}){helpDef}"
+        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",{member.Key},{helpDef},\"{member.Name}\",{member.Note});\n"
+        # for member in self.Categories:
+        #     s += f"\t\t\t{member.SimpleName}.Help(help);\n"
+        # s += f"\t\t}}\n"
+
+
+        # ## query syntax
+
+        # if self.Root:
+        #     s += "\t\tstd::vector<JSL::ParameterDescription>  GetDescription(std::string parameter)\n\t\t{"
+        #     s += f"{idt}auto firstLetter = parameter.find_first_not_of('-');{idt}if (firstLetter != std::string::npos){{{idt}\tparameter.erase(0, firstLetter);{idt}}}{idt}else{idt}{{{idt}\tparameter.clear();{idt}}}"
+        #     s += idt + "std::vector<JSL::ParameterDescription> found;"
+        #     s += idt + ""
+        #     append = f"{idt}return found;"
+        # else:
+        #     s += "\t\tvoid GetDescription(std::string parameter,std::vector<JSL::ParameterDescription> & found)\n\t\t{"
+        #     append = ""
+
+        # for member in self.Members:
+        #     s += f"{idt}JSL::ParameterDescription(\"{member.Name}\",\"{member.Type}\",{member.Key},{member.Name},({member.Type}){member.Default},{member.Note}).Query(parameter,found);"
+        # for category in self.Categories:
+        #     s += f"{idt}{category.Name}.GetDescription(parameter,found);"
+        # s += append + "\n\t\t}\n"
+        # ## root help compiler
+        # if self.Root:
+        #     s += "\t\tvoid SaveConfig(std::string file)\n\t\t{"
+        #     s += f"{idt}auto contents = ToText();\n"
+        #     s += f"{idt}JSL::writeStringToFile(file,contents,std::ios::out);"
+        #     s += "\n\t\t}\n"
+
+
+        #     s += f"\tprivate:\n"
+        #     s += "\t\tvoid MasterHelp()\n\t\t{\n"
+        #     s += f"\t\t\tJSL::HelpMessages help;\n"
+        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",\"config\",\"__none__\",\"ConfigureFile\",\"When not equal to '__none__', the system will attempt to read this file in as a configuration file.\\nConfiguration files work the same as command line arguments, each line should contain a single flag and a value\\nIMPORTANT: Flags in config files omit the '-'\");\n"
+        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",\"configure-delimiter\",\" \",\"ConfigureDelimiter\",\"The string which separates the flag from the values in the config file.\\nOnly the first instance of the flag is counted, subsequent occurrences are ignored.\");\n"
+        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",\"h, --help\",false,\"Help\",\"When true, activates the help page, then exits\");\n"
+        #     s += "\t\t\tHelp(help);\n"
+        #     s += "\t\t\thelp.print();\n"
+        #     s += "\t\t\texit(0);\n"
+        #     s+= "\t\t}\n"
+
+            
+        
+        s += "};"
+
+        if self.IsGlobal:
+            s += f"\nextern {self.Name} {self.InstanceName};"
+
+        if needsClose:
+            s += f"\n}} // end namespace {ns}"
+        return s
+    def GenerateGlobal(self,outname):
+        # a simple hack to generate a .cpp file which contains the ODR for the extern
+        s += f"\n{self.Name} {self.InstanceName};"
+        return s
+        
+class Braces:
+    
+    def __init__(self,text,level = 0):
+        self.checkBalance(text)
+        pos = 0
+        self.Headers = []
+        self.Content = []
+        self.Text = text
+        if "{" not in text:
+            self.Text = text
+            self.IsLeaf = True
+            return
+        self.IsLeaf = False
+        while True:
+            first = self.findNextBrace(text,pos)
+            if first == -1:
+                first = pos
+                last = len(text)
+            else:
+                last = self.findEndBrace(text,first)
+
+            header = " ".join(text[pos:first].split("\n")).lstrip().rstrip()
+            content = text[first+1:last-1].lstrip().rstrip()
+            pos = last
+
+            if len(header) > 0:
+                self.Headers.append(header)
+                self.Content.append(Braces(content))
+
+            if pos >= len(text):
+                break
+    def checkBalance(self,text):
+        level = 0
+        for i in range(len(text)):
+            if text[i]== '{':
+                level +=1
+            if text[i] == '}':
+                level -=1
+            
+        if level != 0:
+            raise Exception(f"Unbalanced braces in text {text} - cannot parse")
+
+    def findNextBrace(self,text,pos):
+        if "{" not in text[pos:]:
+            return -1
+        else:
+            return text[pos:].index("{")+pos
+
+    def findEndBrace(self,text,begin):
+        level = 0
+        pos = begin
+        while level > 0 or pos==begin:
+            if text[pos]== '{':
+                level +=1
+            if text[pos] == '}':
+                level -=1
+            pos+=1
+        return pos
+
+
+class SettingsParser:
+    def __init__(self, text):
+        # self.Tokens = tokens
+        self.Braces = Braces(text)
+        
+        if len(self.Braces.Headers) != 1:
+            raise Exception(f"Each file should have a single root-level entity - I found the following: {self.Braces.Headers}")
+    def GetRoot(self):
+        self.Pos = 1
+        Root = SettingsGroup(self.Braces.Headers[0],self.Braces.Content[0],True)
+
+        return Root
+    
+
+def loadData():
+
+    #check there's enough inputs
+    if len(sys.argv) != 2:
+        raise Exception("This utility requires a single filename be provided")
+
+    #check the input is a valud file
+    target = sys.argv[1]
+
+    try:
+        s = ""
+        with open(target,"r") as file:
+            for line in file:
+                if "!!!" not in line:
+                    s += line
+                else:
+                    global errors_found
+                    errors_found = True
+    except: 
+        raise Exception(f"Could not load file {target} - check it exists and you have access permissions")
+    return s
+def sternWarning():
+    print("\033[35m\nWARNING: It is best practice to self-document with the _note_ field. The following members lack this field:")
+    for missing in no_note_members:
+        print("\t- " + missing)
+    print("\033[0m")
+
+
+def MakeHeader(rootObject,outname):
+    text = rootObject.GenerateHeader()
+    ## check if file has changed
+    s = ""
+    if outname.exists():
+        with open(outname,"r") as file:
+            for line in file:
+                s += line
+
+    ##if not, then write to file
+    if s != text:
+        with open(outname,"w") as file:
+            file.write(text)
+        print("Successfully wrote changes to file")
+    else:
+        print("No changes in header")
+
+def MakeSource(rootObject, outname):
+    text = rootObject.GenerateCpp(outname.with_suffix(".hpp"))
+    ## check if file has changed
+    s = ""
+    if outname.exists():
+        with open(outname,"r") as file:
+            for line in file:
+                s += line
+
+
+    if rootObject.IsGlobal:
+        s += rootObject.GenerateGlobal()
+
+    ##if not, then write to file
+    if s != text:
+        with open(outname,"w") as file:
+            file.write(text)
+        print("Successfully wrote changes to file")
+    else:
+        print("No changes in source code")
+
+def Output(rootObject):
+    origName = sys.argv[1]
+    r = pathlib.Path(origName)
+
+    
+    MakeHeader(rootObject,r.with_suffix(".hpp"))
+    MakeSource(rootObject,r.with_suffix(".cpp"))
+
+
+    if (rootObject.IsGlobal):
+        t = rootObject.GenerateDefinition(r)
+        defname = r.with_suffix(".cpp")
+        with open(defname,"w") as file:
+            file.write(t)
+
+def InsertError(d,errorObj):
+    origName = sys.argv[1]
+    r = pathlib.Path(origName)
+    outname = r.with_suffix(".hpp")
+
+    error = "!!!! HSON_MAKE ERROR: " + str(errorObj).replace("\n"," // ")
+    s = error +"\n" + d + error ##newly constructed error
+
+    s_test = ""
+    with open(origName,"r") as file:
+        for line in file:
+            s_test += line
+    
+    if s != s_test:
+        with open(origName,"w") as file:
+            file.write(s)
+
+        outname = r.with_suffix(".hpp")
+        with open(outname,"w") as file:
+            file.write(f"/*\n\t HSON_MAKE ERROR: Could not compile header from source\nError was\n\t{errorObj}*/")
+    
+def RemoveErrors(text):
+    origName = sys.argv[1]
+
+    with open(origName,"w") as file:
+        text = text.split("\n")
+        for line in text:
+            if len(line) > 0:
+                file.write(line +"\n")
+
+if __name__== "__main__":
+    try:
+        d = loadData()
+        G = SettingsParser(d)
+        R = G.GetRoot()
+        if len(no_note_members) > 0:
+            sternWarning()
+        Output(R)
+        if errors_found:
+            RemoveErrors(d)
+    except Exception as e:
+        print("ERROR")
+        print(e)
+        print("Template generation was unsuccessful. No output written.")
+        InsertError(d,e)

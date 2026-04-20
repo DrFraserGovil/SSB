@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# Configuration
+PARSER_SCRIPT="hson_make"
+
+# Check if inotify-tools is installed
+if ! command -v inotifywait &> /dev/null; then
+    echo "Error: 'inotifywait' not found. Install it with: sudo apt install inotify-tools"
+    exit 1
+fi
+
+# Check for input argument
+if [ -z "$1" ]; then
+    echo "Usage: ./hson_watcher <target_file.hson>"
+    exit 1
+fi
+
+TARGET_FILE="$1"
+# Verify target exists
+if [ ! -f "$TARGET_FILE" ]; then
+    echo "Error: File '$TARGET_FILE' not found."
+    exit 1
+fi
+
+
+# --- prints a fancy header --- 
+top_message() {
+    clear
+    echo "--- HSON Watcher Active ---"
+    echo "Monitoring file: " $TARGET_FILE
+}
+
+# --- Internal Logic: The actual watcher function ---
+run_watcher() {
+    ABS_PATH=$(readlink -f "$TARGET_FILE")
+    # Unique ID based on file path
+    ID_HASH=$(echo -n "$ABS_PATH" | md5sum | awk '{print $1}')
+    PID_FILE="/tmp/hson_watcher_$ID_HASH.pid"
+
+    # 1. THE ASSASSINATION
+    if [ -f "$PID_FILE" ]; then
+        OLD_PID=$(cat "$PID_FILE")
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            # Kill the entire process group (the '-' prefix) 
+            # This shuts down the old bash script AND its inotify child
+            kill -TERM -"$OLD_PID" 2>/dev/null
+            sleep 0.2
+        fi
+    fi
+
+    # 2. BECOME A GROUP LEADER
+    # This ensures that 'kill -PID' targets this script and all children
+    if [ "$$" -eq "$(ps -o pgid= -p $$)" ]; then
+         : # Already leader
+    else
+         exec setsid bash "$0" "$TARGET_FILE" --child-active
+    fi
+
+    echo $$ > "$PID_FILE"
+    trap "rm -f '$PID_FILE'; exit" INT TERM EXIT
+
+    top_message
+    $PARSER_SCRIPT "$TARGET_FILE"
+
+    # 3. THE ASYNC LOOP
+    while true; do
+        # Run inotify in background
+        inotifywait -qq -e modify "$TARGET_FILE" &
+        WAIT_PID=$!
+        
+        # Wait for either the file to change OR a signal to arrive
+        wait $WAIT_PID
+        
+        top_message
+        echo -n "[$(date +%T)] File update detected... "
+        $PARSER_SCRIPT "$TARGET_FILE"
+    done
+}
+
+# --- Launcher Logic ---
+# If the second argument is "--child", we are already inside the new window
+if [ "$2" == "--child" ]; then
+    run_watcher
+    exit 0
+fi
+
+# Otherwise, we are the parent: Check inputs and spawn the window
+if [ -z "$TARGET_FILE" ]; then
+    echo "Usage: ./hson_watcher <target_file.hson>"
+    exit 1
+fi
+
+# Try terminals in order of "modernity"
+if command -v gnome-terminal &> /dev/null; then
+    gnome-terminal --title="HSON Watcher ($TARGET_FILE)" -- bash "$0" "$TARGET_FILE" --child &
+elif command -v konsole &> /dev/null; then
+    konsole -p "WindowTitle=HSON Watcher" -e bash "$0" "$TARGET_FILE" --child  &
+elif command -v uxterm &> /dev/null; then
+    uxterm -T "HSON Watcher" -fa 'Monospace' -e bash "$0" "$TARGET_FILE" --child &
+elif command -v xterm &> /dev/null; then
+    xterm -T "HSON Watcher" -fa 'Monospace' -fs 11 -e bash "$0" "$TARGET_FILE" --child &
+else
+    echo "Warning: No preferred terminal emulator found. Running in-place..."
+    run_watcher
+fi
+
+echo "Launched watcher process in a new window"

@@ -1,0 +1,54 @@
+{
+  "name": "HSON",
+  "scopeName": "source.hson",
+  "fileTypes": ["hson"],
+  "patterns": [
+    {
+      "name": "comment.line.triple-exclamation.hson",
+      "match": "!!!.*$"
+    },
+    {
+      "name": "keyword.control.section.hson",
+      "match": "\\b(?i:members|categories)\\b"
+    },
+    {
+      "name": "keyword.other.assignment.hson",
+      "match": "\\b(?:(default)|(trigger)|(note))\\b\\s*(=)",
+      "captures": {
+        "1": { "name": "entity.name.namespace.default.hson" },
+        "2": { "name": "string.regexp.action.trigger.hson" },
+        "3": { "name": "constant.character.escape.note.hson" },
+        "4": { "name": "keyword.operator.assignment.hson" }
+      }
+    },
+ {
+  "name": "meta.member.definition.hson",
+  "begin": "^(?![^=]*=)\\s*([a-zA-Z_][a-zA-Z0-9_\\s*:<>]*(?:\\s+[a-zA-Z_][a-zA-Z0-9_\\s*:<>]*)?)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+  "beginCaptures": {
+    "1": { "name": "storage.type.hson" },
+    "2": { "name": "entity.name.function.member.hson" }
+  },
+  "end": "(?=\\{)",
+  "applyEndPatternLast": 1
+},
+    {
+      "name": "meta.block.header.hson",
+      "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\{|\\s*\\{)",
+      "captures": {
+        "1": { "name": "entity.name.section.hson" }
+      }
+    },
+    {
+      "name": "string.quoted.double.hson",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.hson", "match": "\\\\." }
+      ]
+    },
+    {
+      "name": "constant.numeric.hson",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    }
+  ]
+}
