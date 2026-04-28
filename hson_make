@@ -311,12 +311,17 @@ class SettingsGroup:
         s = ""
         if self.Root:
             s += f"#include \"{source.name}\"\n\n"
-
+            s += "#include \"Parameters/Parameter.h\"\n"
+            s += "#include \"FileIO/fileWriters.h\"\n"
+            s += "#include <cstdlib>//for exit(0)\n"
         for member in self.Categories:
             s += member.GenerateCpp(source,self)
 
         for function in self.Functions:
             s += function.SourceRender(self)
+        if self.IsGlobal:
+            s += self.GenerateGlobal()
+            print(self.GenerateGlobal())
         return s
 
     def GenerateHeader(self,parent=None):
@@ -325,10 +330,9 @@ class SettingsGroup:
         if self.Root:
             s += "/*\n\tThis header file was auto-generated from a .hson template\n\tWARNING: Do not make manual modifications, as they may be overwritten.\n*/\n"
             s += "#pragma once\n"
-            s += "#include \"JSL/modules/Parameters/Parameter.h\"\n"
-            s += "#include \"JSL/modules/Parameters/Describer.h\"\n"
-            s += "#include \"JSL/modules/FileIO/fileWriters.h\"\n"
-            s += "#include <cstdlib>//for exit(0)\n"
+            s += "#include \"Parameters/Describer.h\"\n"
+            s += "#include \"Parameters/Parsing.h\"\n"
+           
             if includeString:
                 s += "#include <string>\n"
             if includeVec:
@@ -379,105 +383,7 @@ class SettingsGroup:
             s += function.HeaderRender(idt)
 
      
-        # ##parsing
-        # s += "\t\tvoid Parse(int argc, char** argv)\n"
-        # s += "\t\t{\n"
-
-        # if self.Root:
-        #     s +="\t\t\t//Special handling to trigger configuration or help\n"
-        #     s += "\t\t\tstd::string NULLFILE = \"__none__\";\n"
-        #     s += "\t\t\tJSL::Parameter<std::string> ConfigureFile(JSL::internal::NULLFILE,\"config\",argc,argv);\n"
-        #     s += "\t\t\tJSL::Parameter<std::string> ConfigureDelimiter(\" \",\"config-delimiter\",argc,argv);\n"
-        #     s += "\t\t\tbool HelpRequested = JSL::Toggle(\"help\",argc,argv).Value() || JSL::Toggle(\"h\",argc,argv).Value();\n"
-        #     s += "\t\t\tif (HelpRequested)\n\t\t\t{\n\t\t\t\tMasterHelp();\n\t\t\t}\n"
-        #     s += "\t\t\tif (ConfigureFile.Value() != NULLFILE)\n\t\t\t{\n\t\t\t\tConfigure(ConfigureFile.Value(),ConfigureDelimiter.Value());\n\t\t\t}\n"
-
-        # for member in self.Members:
-        #     s += "\t\t\t" + member.Parse() + "\n"
-        # for member in self.Categories:
-        #     s += f"\t\t\t{member.SimpleName}.Parse(argc,argv);\n"
-        # s += "\t\t}\n"
-        # ##configuring
-        # s += "\t\tvoid Configure(const std::string & configFile, std::string configDelimiter)\n"
-        # s += "\t\t{\n"
-        # for member in self.Members:
-        #     s += "\t\t\t" + member.Configure() + "\n"
-        # for member in self.Categories:
-        #     s += f"\t\t\t{member.SimpleName}.Configure(configFile,configDelimiter);\n"
-        # s += "\t\t}\n"
-        # ##line parsing
-        # s += "\t\tvoid ParseLine(const std::vector<std::string> & linevec)\n"
-        # s += "\t\t{\n"
-        # for member in self.Members:
-        #     s += "\t\t\t" + member.LineParse() + "\n"
-        # for member in self.Categories:
-        #     s += f"\t\t\t{member.SimpleName}.ParseLine(linevec);\n"
-        # s += "\t\t}\n"
-
-        # ##equality check
-        # s += f"\t\tauto operator<=>(const {name_root}&) const = default;\n"
-        
-        # ## write to file
-        # idt = "\n\t\t\t"
-        # s += "\t\tstd::string ToText()\n\t\t{\n\t\t\tstd::ostringstream s;"
-        # for member in self.Members:
-        #     q = member.Key[:-1]
-        #     q += " "
-        #     s += idt + f"s << {q + "\""} << JSL::MakeString({member.Name}) << \"\\n\";"
-        # for category in self.Categories:
-        #     s += f"{idt}s << {category.Name}.ToText();"
-        # s += idt + "return s.str();"
-        # s+= "\n\t\t}"
-
-        # ##help message
-        # s += f"\n\t\tvoid Help(JSL::HelpMessages & help)\n\t\t{{\n"
-        # for member in self.Members:
-        #     helpDef = member.Default
-        #     if "vector" in member.Type:
-        #         helpDef = f"({member.Type}){helpDef}"
-        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",{member.Key},{helpDef},\"{member.Name}\",{member.Note});\n"
-        # for member in self.Categories:
-        #     s += f"\t\t\t{member.SimpleName}.Help(help);\n"
-        # s += f"\t\t}}\n"
-
-
-        # ## query syntax
-
-        # if self.Root:
-        #     s += "\t\tstd::vector<JSL::ParameterDescription>  GetDescription(std::string parameter)\n\t\t{"
-        #     s += f"{idt}auto firstLetter = parameter.find_first_not_of('-');{idt}if (firstLetter != std::string::npos){{{idt}\tparameter.erase(0, firstLetter);{idt}}}{idt}else{idt}{{{idt}\tparameter.clear();{idt}}}"
-        #     s += idt + "std::vector<JSL::ParameterDescription> found;"
-        #     s += idt + ""
-        #     append = f"{idt}return found;"
-        # else:
-        #     s += "\t\tvoid GetDescription(std::string parameter,std::vector<JSL::ParameterDescription> & found)\n\t\t{"
-        #     append = ""
-
-        # for member in self.Members:
-        #     s += f"{idt}JSL::ParameterDescription(\"{member.Name}\",\"{member.Type}\",{member.Key},{member.Name},({member.Type}){member.Default},{member.Note}).Query(parameter,found);"
-        # for category in self.Categories:
-        #     s += f"{idt}{category.Name}.GetDescription(parameter,found);"
-        # s += append + "\n\t\t}\n"
-        # ## root help compiler
-        # if self.Root:
-        #     s += "\t\tvoid SaveConfig(std::string file)\n\t\t{"
-        #     s += f"{idt}auto contents = ToText();\n"
-        #     s += f"{idt}JSL::writeStringToFile(file,contents,std::ios::out);"
-        #     s += "\n\t\t}\n"
-
-
-        #     s += f"\tprivate:\n"
-        #     s += "\t\tvoid MasterHelp()\n\t\t{\n"
-        #     s += f"\t\t\tJSL::HelpMessages help;\n"
-        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",\"config\",\"__none__\",\"ConfigureFile\",\"When not equal to '__none__', the system will attempt to read this file in as a configuration file.\\nConfiguration files work the same as command line arguments, each line should contain a single flag and a value\\nIMPORTANT: Flags in config files omit the '-'\");\n"
-        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",\"configure-delimiter\",\" \",\"ConfigureDelimiter\",\"The string which separates the flag from the values in the config file.\\nOnly the first instance of the flag is counted, subsequent occurrences are ignored.\");\n"
-        #     s += f"\t\t\thelp.AddMessage(\"{name_root}\",\"h, --help\",false,\"Help\",\"When true, activates the help page, then exits\");\n"
-        #     s += "\t\t\tHelp(help);\n"
-        #     s += "\t\t\thelp.print();\n"
-        #     s += "\t\t\texit(0);\n"
-        #     s+= "\t\t}\n"
-
-            
+    
         
         s += "};"
 
@@ -487,10 +393,9 @@ class SettingsGroup:
         if needsClose:
             s += f"\n}} // end namespace {ns}"
         return s
-    def GenerateGlobal(self,outname):
+    def GenerateGlobal(self):
         # a simple hack to generate a .cpp file which contains the ODR for the extern
-        s += f"\n{self.Name} {self.InstanceName};"
-        return s
+        return f"\n{self.Name} {self.InstanceName};"
         
 class Braces:
     
@@ -641,11 +546,7 @@ def Output(rootObject):
     MakeSource(rootObject,r.with_suffix(".cpp"))
 
 
-    if (rootObject.IsGlobal):
-        t = rootObject.GenerateDefinition(r)
-        defname = r.with_suffix(".cpp")
-        with open(defname,"w") as file:
-            file.write(t)
+
 
 def InsertError(d,errorObj):
     origName = sys.argv[1]
