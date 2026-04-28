@@ -359,3 +359,28 @@ std::vector<std::string> & ParsedSetting::RegisteredKeys()
 	static std::vector<std::string> reg{};
 	return reg;
 }
+
+std::string ParsedAggregator::MakeHeader(std::string parentName)
+{
+	bool IsRoot = (parentName.size() == 0);
+	std::ostringstream os;
+	std::string myName = parentName + Name + "Object";
+	parentName += Name + "_";
+	for (auto el : Nested)
+	{
+		os << el.MakeHeader(parentName) << "\n";
+	}
+
+	os << "class " << myName <<" : public ";
+	if (IsRoot)
+	{
+		os << "JSL::Parameter::RootAggregator\n";
+	}
+	else
+	{
+		os << "JSL::Parameter::Aggregator\n";
+	}
+
+	return os.str();
+
+}

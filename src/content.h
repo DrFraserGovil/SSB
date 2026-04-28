@@ -103,6 +103,8 @@ class ParsedAggregator
         ParsedAggregator(std::string_view name, ContentBlock contents);
         bool Initialised = false;
         void Print(int idt = 0);
+
+        std::string MakeHeader(std::string parentName);
     private:
         bool GetNested(ContentBlock contents);
         bool GetCommands(ContentBlock contents);

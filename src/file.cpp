@@ -178,7 +178,8 @@ bool SSBFile::ConstructAggregators()
     Root = ParsedAggregator(top,Contents.Members[1]);
     if (Root.Initialised)
     {
-        Root.Print();
+        // Root.Print();
+        std::cout << Root.MakeHeader("");
         return true;
     }
     return false;
