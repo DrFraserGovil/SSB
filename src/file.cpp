@@ -176,11 +176,37 @@ bool SSBFile::ConstructAggregators()
     //Here we have a single top-level object
     std::string top = Contents.Members[0].Text;
     Root = ParsedAggregator(top,Contents.Members[1]);
+    Root.GlobalWarn(true);
+    Root.CommandSweep();
     if (Root.Initialised)
     {
-        // Root.Print();
-        std::cout << Root.MakeHeader("");
         return true;
     }
     return false;
+}
+
+
+bool SSBFile::WriteTo(fs::path output)
+{
+    std::string txt = JSL::trim(Root.MakeHeader(""));
+
+    bool needsWrite = true;
+    if (fs::exists(output))
+    {
+        auto extantText = JSL::getFileLines(output);
+        auto lines = JSL::split(txt,"\n");
+        if (lines == extantText)
+        {
+            LOG(INFO) << "No rewrite needed: disk up to date";
+            needsWrite = false;
+        }
+      
+    }
+
+    if (needsWrite)
+    {
+        JSL::initialiseFile(output);
+        JSL::writeStringToFile(output,Root.MakeHeader(""),std::ios::out);
+    }
+    return true;
 }

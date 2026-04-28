@@ -2,6 +2,7 @@
 #include "settings.h"
 #include <filesystem>
 #include "file.h"
+// #include "../tst.hpp"
 SettingsObject Settings;
 
 namespace fs = std::filesystem;
@@ -59,12 +60,12 @@ std::pair<std::string,std::vector<fs::path>> ProcessCommands()
     return {out,paths};
 }
 
-
 int main(int argc, char **argv)
 {
 
     try
     {
+
         Settings.Parse(argc,argv);
         if (Settings.Verbose)
         {
@@ -78,6 +79,8 @@ int main(int argc, char **argv)
             for (auto file : files)
             {
                 SSBFile f(file);
+                file.replace_extension(".hpp");
+                f.WriteTo(file);
             }
         }
 

@@ -5,12 +5,6 @@
 #include <regex>
 
 
-std::string stringify(std::string_view word)
-{
-	if (word.empty()){return "\"\"";}
-	return (word.starts_with('"') ? "" : "\"") + std::string{word} + (word.ends_with('"') ? "" : "\"");
-}
-
 bool captureBlock(std::vector<ContentBlock> contents, std::function<bool(ContentBlock block,std::string)> process)
 {
 	std::string capture = "";
@@ -52,10 +46,39 @@ std::string ContentBlock::Flatten()
 	return os.str();
 }
 
+void ParsedAggregator::GlobalWarn(bool isRoot)
+{
+	if (IsGlobal && !isRoot)
+	{
+		LOG(WARN) << Name << " is marked global but is not root: this will be ignored";
+	}
+
+	for (auto & sub : Nested)
+	{
+		sub.GlobalWarn(false);
+	}
+}
+
 ParsedAggregator::ParsedAggregator(std::string_view name, ContentBlock contents)
 {
-	Name = name;
 	LOG(DEBUG) << "Parsing aggregate " << name;
+	auto ns = JSL::split_view(name,":");
+	name = JSL::trim_view(ns[0]);
+	if (ns.size() > 1)
+	{
+		if (JSL::iEquals(JSL::trim_view(ns[1]),"global"))
+		{
+			IsGlobal = true;
+		}
+	}
+	
+	if (JSL::split_view(name," ").size() > 1)
+	{
+		LOG(ERROR) << "Aggregator names cannot contain spaces (" << name <<")";
+		return;
+	}
+	Name = name;
+
 	std::vector<std::string> Expected = {"members","categories","commands"};
 	std::set<std::string> Extracted;
 
@@ -193,7 +216,26 @@ bool ParsedAggregator::GetCommands(ContentBlock contents)
 				}
 			}
 		}
-		Commands.emplace_back(capture,stringify(os.str()));
+
+
+		auto sv = JSL::split_view(capture,":");
+		capture = JSL::trim_view(sv[0]);
+		bool isdefault = false;
+		if (sv.size() > 1)
+		{
+			auto cmd = JSL::trim(sv[1]);
+			if (cmd == "default")
+			{
+				isdefault = true;
+			}
+		}
+
+		if (JSL::split_view(capture," ").size() > 1)
+		{
+			LOG(ERROR) << "Command names cannot contain spaces";
+			return false;
+		}
+		Commands.emplace_back(capture,stringify(os.str()),isdefault);
 		return true;
 	});
 	return r;
@@ -235,138 +277,25 @@ bool ParsedAggregator::GetMembers(ContentBlock contents)
 }
 
 
-
-std::string ParsedSetting::ProcessKeys()
-{
-	std::string_view val = Keys;
-	auto & keyRegister = RegisteredKeys();
-	std::ostringstream os;
-	std::vector<char> badChar = {'{','}',']','[','(',')','-'};
-
-	while(JSL::contains(val.front(),badChar)){
-		val = val.substr(1);
-	}
-	while(JSL::contains(val.back(),badChar))
-	{
-		val = val.substr(0,val.size()-1);
-	}
-
-	auto v = JSL::split(val,",");
-	for (auto & cmd : v)
-	{
-		cmd = stringify(JSL::trim_view(cmd));
-		if (JSL::contains(std::string{cmd},keyRegister))
-		{
-			LOG(ERROR) << "The key " << cmd << " is already in use (Encountered in " << Type << " " << Name << ")";
-			throw std::runtime_error("Duplicate key");
-		}
-		keyRegister.push_back(cmd);
-	}
-	os << "{" << JSL::join(v,", ") << "}";
-	return os.str();
-}
-
-ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data)
-{
-	LOG(DEBUG) << "Parsing " << name;
-	name = JSL::trim_view(name,"//");
-	auto sp = JSL::split_view(name, " ");
-
-	Name = sp.back();
-	sp.pop_back();
-	
-	if (sp.size() > 0)
-	{
-		Type = JSL::join(sp," ");
-
-		std::regex e("(^|[^:])\\b(vector|string)\\b");
-		Type = std::regex_replace(Type,e,"$1std::$2");
-	}
-	else
-	{
-		LOG(ERROR) << "Could not locate type for parameter '" << name << "'";
-		return;
-	}
-	
-	for (auto el : data)
-	{
-		std::string_view cmd = JSL::trim_view(el,"//");
-		if (cmd.empty()) { continue;}
-		//remove spurious semicolons
-		while (cmd.back() == ';')
-		{
-			cmd  = cmd.substr(0,cmd.size()-1);
-		}
-
-		auto splitter = cmd.find_first_of('=');
-
-
-		if (splitter == std::string_view::npos)
-		{
-			LOG(ERROR) << "Setting specifications must take the value [key] = [value] (" << cmd << ")";
-			return;
-		}
-		
-		std::string_view key = JSL::trim_view(cmd.substr(0,splitter));
-		std::string_view val = JSL::trim_view(cmd.substr(splitter+1)); //we don't want the equals
-
-		LOG(DEBUG) << "Captured " << key << " = " << val << " for " << Name;
-		if (JSL::iEquals(key,"note"))
-		{
-			Note = val;
-			continue;
-		}
-		if (JSL::iEquals(key,"default"))
-		{
-			Default = val;
-			continue;
-		}
-		if (JSL::iEquals(key,"trigger"))
-		{
-			Keys = val;
-			continue;
-		}
-
-		LOG(ERROR) << "Unknown command '" << key << "' encountered in " << el;
-		return;
-	}
-
-	if (Default.size() == 0)
-	{
-		LOG(ERROR) << "No default value provided for " << Name;
-		return;	
-	}
-
-	if (Note.size() == 0)
-	{
-		LOG(ERROR) << "No description provided for " << Name;
-		return;
-	}
-	Note = stringify(Note);
-
-	Keys = ProcessKeys();
-	if (Keys.size() == 0)
-	{	
-		LOG(ERROR) << "No valid triggers provided for " << Name;
-		return;
-	}
-
-	Initialised = true;
-}
-
-std::vector<std::string> & ParsedSetting::RegisteredKeys()
-{
-	static std::vector<std::string> reg{};
-	return reg;
-}
-
 std::string ParsedAggregator::MakeHeader(std::string parentName)
 {
 	bool IsRoot = (parentName.size() == 0);
 	std::ostringstream os;
-	std::string myName = parentName + Name + "Object";
+
+	if (IsRoot)
+	{
+		os << "#pragma once\n#include <JSL/Parameters.h>\n\n";
+	}
+	std::string myName = parentName + Name;
+	
+	if (Name.find("Obj") == std::string::npos)
+	{
+		myName += "Obj";
+	} 
+
+	ObjectName = myName;
 	parentName += Name + "_";
-	for (auto el : Nested)
+	for (auto & el : Nested)
 	{
 		os << el.MakeHeader(parentName) << "\n";
 	}
@@ -380,7 +309,118 @@ std::string ParsedAggregator::MakeHeader(std::string parentName)
 	{
 		os << "JSL::Parameter::Aggregator\n";
 	}
+	os << "{\n";
+	os << "\tpublic:\n";
 
+	if (Members.size() > 0) {os << "\t\t//Settings values\n";}
+	for (auto & var : Members)
+	{
+		var.BasicDeclare(os);
+	}
+
+	if (Nested.size() > 0){os << "\n\t\t//Nested objects\n";}
+	for (auto & var : Nested)
+	{
+		os << "\t\t" << var.ObjectName << " " << var.Name << ";\n";
+	}
+
+	os << "\n\t\t//Constructor: register & connect the variables\n";
+	os << "\t\t" << ObjectName << "()\n\t\t{\n";
+	auto idt = std::string(3,'\t');
+	os << idt << "Name = " << stringify(Name) <<";\n";
+	for (auto & var : Members)
+	{
+		var.Set(os);
+	}
+	for (auto & nest: Nested)
+	{
+		os << "\t\t\tNestGroup(" << nest.Name << "," << stringify(nest.Name) << ");\n";
+	}
+
+	for (auto & command:Commands)
+	{
+		os << idt << (command.IsDefault ? "DefaultCommand" : "AddCommand");
+		
+		os << "(" << stringify(command.Name) << ", " << command.Description <<");\n";
+	}
+
+	os << "\t\t}\n";
+	if (Members.size() > 0)
+	{	
+		os << "\tprivate:\n";
+		os << "\t\t//Hidden configurables\n";
+	}
+
+	for (auto & var : Members)
+	{
+		var.ConfigDeclare(os);
+	}
+	os << "};\n";
+
+	if (IsGlobal && IsRoot)
+	{
+		os << "\n//declaration for a global variable";
+		os << "\nextern " << ObjectName << " "  << Name <<";\n";
+	}
 	return os.str();
 
+}
+
+
+void ParsedAggregator::CommandSweep(ParsedAggregator * root)
+{
+	bool wasRoot = false;
+	if (root)
+	{
+		if (Commands.size() > 0)
+		{
+			LOG(WARN) << "Commands assigned to " << Name << " are for presentation only.\nIn the final output they will be attributed to " << root->Name;
+		}
+		for (auto & cmd : Commands)
+		{
+			root->OfferCommand(cmd);
+		}
+	}
+	else
+	{
+		wasRoot = true;
+		//process called by root
+		root = this;
+	}
+
+	for (auto & nest : Nested)
+	{
+		nest.CommandSweep(root);
+	}
+
+
+	if (wasRoot)
+	{
+		bool defaultFound = false;
+		for (auto & cmd: Commands)
+		{
+			if (cmd.IsDefault)
+			{
+				if (defaultFound)
+				{
+					LOG(WARN) << "Multiple default commands set. " << cmd.Name << " is no longer default";
+					cmd.IsDefault = false;
+				}
+
+				defaultFound = true;
+			}
+		}
+	}
+}
+
+void ParsedAggregator::OfferCommand(ParsedCommand & cmd)
+{
+	for (auto & old : Commands)
+	{
+		if (cmd.Name == old.Name)
+		{
+			return;
+		}
+	}
+	Commands.push_back(cmd);
 }

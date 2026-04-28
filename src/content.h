@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <deque>
+#include "parse.h"
 struct ContentBlock
 {
     std::string Text;
@@ -72,30 +73,20 @@ struct ContentBlock
 
 
 
-class ParsedSetting
-{
-    public:
-        std::string Type;
-        std::string Name;
-        std::string Keys;
-        std::string Default;
-        std::string Note;
-        bool Initialised= false;
-        ParsedSetting(std::string_view name, std::deque<std::string> data);
-        static std::vector<std::string> & RegisteredKeys();
-        std::string ProcessKeys();
-};
 class ParsedCommand
 {
     public:
         std::string Name;
         std::string Description;
-        ParsedCommand(std::string_view name, std::string_view text) : Name{name}, Description{text}{};
+        bool IsDefault;
+        std::string Origin;
+        ParsedCommand(std::string_view name, std::string_view text,bool ondef) : Name{name}, Description{text}, IsDefault(ondef){};
 };
 class ParsedAggregator
 {
     public:
         std::string Name;
+        std::string ObjectName;
         std::vector<ParsedAggregator> Nested;
         std::vector<ParsedSetting> Members;
         std::vector<ParsedCommand> Commands;
@@ -105,8 +96,12 @@ class ParsedAggregator
         void Print(int idt = 0);
 
         std::string MakeHeader(std::string parentName);
+        bool IsGlobal = false;
+        void GlobalWarn(bool isRoot);
+        void CommandSweep(ParsedAggregator * root = nullptr);
     private:
         bool GetNested(ContentBlock contents);
         bool GetCommands(ContentBlock contents);
         bool GetMembers(ContentBlock contents);
+        void OfferCommand(ParsedCommand & cmd);
 };
