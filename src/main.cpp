@@ -1,7 +1,7 @@
-#define JSL_INCLUDE_LOG
 #include <JSL.h>
 #include "settings.h"
 #include <filesystem>
+#include "file.h"
 SettingsObject Settings;
 
 namespace fs = std::filesystem;
@@ -25,7 +25,14 @@ std::pair<std::string,std::vector<fs::path>> ProcessCommands()
     for (auto file : files)
     {
         fs::path tmp{file};
-        if (fs::exists(tmp) && fs::is_regular_file(tmp))
+        bool isDiskFile = fs::exists(tmp) && fs::is_regular_file(tmp);
+        if (!isDiskFile)
+        {
+            LOG(ERROR) << "'" << file <<"' is not a file on disk";
+            throw std::runtime_error("Invalid input error");
+        }
+        bool isSSB = Settings.RelaxedFileExtension || tmp.extension() == Settings.FileExtension;
+        if (isDiskFile && isSSB)
         {
             paths.push_back(tmp);
         }
@@ -39,6 +46,13 @@ std::pair<std::string,std::vector<fs::path>> ProcessCommands()
     if (JSL::contains(out,std::vector<std::string>{"pause","resume"}) && paths.size() > 0)
     {
         LOG(ERROR) << "Cannot accept file input with a " << out << " command";
+        throw std::runtime_error("Invalid input error");
+    }
+    if (out == "build" && paths.size() == 0)
+    {
+        LOG(ERROR) << "Must provide an input file to build";
+        throw std::runtime_error("Invalid input error");
+
     }
 
      LOG(INFO) << "Executing command '" << out << ((paths.size()> 0) ? "' on '" + (std::string)paths[0] + "'" : "'");
@@ -52,13 +66,26 @@ int main(int argc, char **argv)
     try
     {
         Settings.Parse(argc,argv);
-
+        if (Settings.Verbose)
+        {
+            JSL::Log::Global::Config.SetLevel(DEBUG);
+        }
+        JSL::Log::Global::Config.ShowHeaders = false;
         auto [cmd, files] = ProcessCommands();
        
+        if (cmd== "build")
+        {
+            for (auto file : files)
+            {
+                SSBFile f(file);
+            }
+        }
+
     }
     catch(const std::exception& e)
     {
-        LOG(INFO) << "Did not recover from " << e.what() << ".\nExiting";
+        LOG(INFO) << "Did not recover from error '" << e.what() << "'.\nExiting";
     }
     
+
 }
