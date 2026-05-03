@@ -69,7 +69,6 @@ ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data
 		{
 			cmd  = cmd.substr(0,cmd.size()-1);
 		}
-
 		auto splitter = cmd.find_first_of('=');
 
 
@@ -103,6 +102,12 @@ ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data
 		return;
 	}
 
+	if (Type == "toggle")
+	{
+		Type = "bool";
+		Default = "false";
+	}
+
 	if (Default.size() == 0)
 	{
 		LOG(ERROR) << "No default value provided for " << Name;
@@ -134,7 +139,11 @@ std::vector<std::string> & ParsedSetting::RegisteredKeys()
 
 void ParsedSetting::BasicDeclare(std::ostringstream & os)
 {
-	os << "\t\t" << Type <<" " << Name <<";\n";
+	//remove quotes from note
+	auto b = Note.find_first_not_of('"');
+	auto e = Note.find_last_not_of('"');
+	os << "\t\t//! @brief " << Note.substr(b,e-b) <<"\n";
+	os << "\t\t" << Type <<" " << Name <<";\n\n";
 }
 void ParsedSetting::ConfigDeclare(std::ostringstream & os)
 {

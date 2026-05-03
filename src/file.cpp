@@ -1,21 +1,55 @@
 #include "file.h"
 #include <JSL.h>
 #include <stack>
-#include "settings.h"
+#include "settings.hpp"
 namespace fs = std::filesystem;
+
 SSBFile::SSBFile(fs::path path) : Path(path), Contents{}
 {
-    bool success = ExtractContents();
+    StatusGood = ExtractContents();
     
-    if (success)
+    if (StatusGood)
     {
-        success = ConstructAggregators();
+        StatusGood = ConstructAggregators();
     }
 
-    // if (success)
-    // {
-    //     Print();
-    // }
+}
+
+void SSBFile::Convert(fs::path path)
+{
+    auto file = SSBFile(path);
+
+    if (file.StatusGood)
+    {
+        fs::path outpath;
+        if (Settings.Output.RelativeToHere)
+        {
+            outpath = static_cast<fs::path>(Settings.Output.Directory);
+        }
+        else
+        {
+            outpath = path.parent_path() / Settings.Output.Directory;
+        }
+        if (!fs::exists(outpath))
+        {
+            fs::create_directories(outpath);
+        }
+        outpath /= path.filename();
+
+        outpath.replace_extension(Settings.Output.Extension);
+        
+        LOG(INFO) << "Writing output to " << outpath.string();
+
+        file.WriteTo(outpath);
+    }
+    else
+    {
+        LOG(ERROR) << "Could not complete compilation of file " << path.filename();
+        if (Settings.BuildFailIsError)
+        {
+            throw std::runtime_error("Bad compile");
+        }
+    }
 }
 
 

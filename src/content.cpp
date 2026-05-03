@@ -12,7 +12,7 @@ bool captureBlock(std::vector<ContentBlock> contents, std::function<bool(Content
 	{
 		if (block.IsLeaf && block.Text.size() > 0)
 		{
-			capture = block.Text; //JSL::getLower(block.Text);
+			capture = JSL::trim(block.Text,"//"); //JSL::getLower(block.Text);
 			LOG(DEBUG) << "\tCaptured element " << capture;
 			continue;
 		}
@@ -197,6 +197,7 @@ bool ParsedAggregator::GetNested(ContentBlock contents)
 	});
 	return r;
 }
+
 bool ParsedAggregator::GetCommands(ContentBlock contents)
 {
 	LOG(DEBUG) << "\tParsing commands";
@@ -276,7 +277,6 @@ bool ParsedAggregator::GetMembers(ContentBlock contents)
 	return r;
 }
 
-
 std::string ParsedAggregator::MakeHeader(std::string parentName)
 {
 	bool IsRoot = (parentName.size() == 0);
@@ -303,11 +303,11 @@ std::string ParsedAggregator::MakeHeader(std::string parentName)
 	os << "class " << myName <<" : public ";
 	if (IsRoot)
 	{
-		os << "JSL::Parameter::RootAggregator\n";
+		os << "JSL::Parameter::Aggregator\n";
 	}
 	else
 	{
-		os << "JSL::Parameter::Aggregator\n";
+		os << "JSL::Parameter::NestedAggregator\n";
 	}
 	os << "{\n";
 	os << "\tpublic:\n";
@@ -318,7 +318,7 @@ std::string ParsedAggregator::MakeHeader(std::string parentName)
 		var.BasicDeclare(os);
 	}
 
-	if (Nested.size() > 0){os << "\n\t\t//Nested objects\n";}
+	if (Nested.size() > 0){os << "\t\t//Nested objects\n";}
 	for (auto & var : Nested)
 	{
 		os << "\t\t" << var.ObjectName << " " << var.Name << ";\n";
@@ -365,7 +365,6 @@ std::string ParsedAggregator::MakeHeader(std::string parentName)
 	return os.str();
 
 }
-
 
 void ParsedAggregator::CommandSweep(ParsedAggregator * root)
 {

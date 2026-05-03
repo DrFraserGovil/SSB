@@ -1,0 +1,114 @@
+Settings : global
+{
+	Commands
+	{
+		build : default {"Builds the selected file"}
+		pause {"Pauses any active watcher routines"}
+		[filename] {"The name of the file to be acted upon. Must not share a name with any of the other commands"}
+		resume {"Resumes any active watcher routines"}
+		shutdown {"Shuts down any active watcher routines"}
+		watch {"Launches a watcher routine"}
+	}
+	Members
+	{
+		
+		toggle Verbose
+		{
+			trigger = {v,verbose}
+			note = "When true, the logger outputs DEBUG-level output."
+		}
+	   
+		toggle BuildFailIsError
+		{
+			trigger = strict, s
+			note = "When true, a failed SSB-convert will raise an error and exit the program. When false, error logs will be printed to the terminal, but no other action taken."
+		}
+
+		toggle AutoRoot
+		{
+			trigger= r,root
+			note = "If true and multiple top-level objects specified, an aggregate root to contain them all will be generated"
+		}
+
+		
+	}
+	CATEGORIES //just to prove case independence & comment stripping
+	{
+		Input
+		{
+			Members
+			{
+				toggle NoExtensionCheck
+				{
+					trigger=relax-extension
+					note = "When true, any files can be read in as SSB inputs. When false, only those matching the FileExtension variable will match."
+				}
+				string Extension
+				{
+					 trigger={match-extension}
+					note= "The file extension required for a file to be processed by the system"
+					default = ".ssb"
+				}
+			}
+		}
+		Output
+		{
+			Members
+			{
+				string Directory
+				{
+					trigger = {o,output}
+					default = "."
+					note = "Specifies the directory to write the output to. By default this is relative to the source file's directory (see RelativeToHere)"
+				}
+				toggle RelativeToHere
+				{
+					trigger = {from-here}
+					note = "When true, the Directory value is interpreted relative to the current working directory; when false it uses the source file instead."
+				}
+				string Extension
+				{
+					trigger = {out-extension}
+					default = ".hpp"
+					note = "The file extension given to the output file."
+				}
+			}
+		}
+
+		Watcher
+		{
+			Members
+			{
+				double IdleTimeout
+				{
+					default = 10
+					trigger = idle
+ 					note = "The length of time (in minutes) a watcher will stay idle before exiting. A negative value prevents timeouts from ever occuring."
+				}
+				double ReplyTimeout
+				{
+					default = 1
+					trigger = reply-timeout
+ 					note = "The length of time (in seconds) a broadcaster will await a response from a watcher before determining that the watcher is dead"
+				}
+				size_t Debounce
+				{
+					trigger = "delay"
+					note = "The minimum time delay between polling times (in ms)"
+					default = 50
+				}
+				string Socket
+				{
+					default = "ssb.socket"
+					trigger = "socket"
+					note = "The UDS-socket the watcher and broadcaster use to communicate. Only one watcher can exist per socket, and commands are sent only to the watcher associated with the given socket."
+				}
+				toggle ForceAcquire
+				{
+					trigger = {f,force}
+					note="Forcibly acquires the watcher for the chosen socket."
+				}
+			}
+		}
+	}
+}
