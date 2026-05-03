@@ -7,14 +7,14 @@ BUILD_DIR = .build
 all:
 	@mkdir -p $(BUILD_DIR)
 	@cmake -S . -B $(BUILD_DIR)
-	@cmake --build $(BUILD_DIR) --target ssb -- --no-print-directory
+	@cmake --build $(BUILD_DIR) --target ssb_run -- --no-print-directory
 
 
 # 3. Clean up only the build artifacts
 purge:
 	@echo "Removing all build files"
 	@rm -rf $(BUILD_DIR)
-	@rm -f unit ssb
+	@rm -f unit ssb_run
 
 clean:
 	@echo "Rebuilding from scratch"

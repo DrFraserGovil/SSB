@@ -8,6 +8,7 @@ Settings : global
 		resume {"Resumes any active watcher routines"}
 		shutdown {"Shuts down any active watcher routines"}
 		watch {"Launches a watcher routine"}
+		status{"Queries an active watcher as to its status"}
 	}
 	Members
 	{

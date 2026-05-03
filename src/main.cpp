@@ -12,6 +12,7 @@ std::pair<std::string,std::vector<fs::path>> ProcessCommands()
 {
 	auto [commands,files]  = Settings.ParseCommands();
 	
+	LOG(DEBUG) << "Commands: " << JSL::MakeString(commands) << " Files: " << JSL::MakeString(files);
 	if (commands.size() > 1)
 	{
 		LOG(ERROR) << "Too many commands passed " << JSL::MakeString(commands) << ". Only one command allowed.";

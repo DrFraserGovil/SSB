@@ -106,7 +106,6 @@ class SettingsObj : public JSL::Parameter::Aggregator
 		//! @brief If true and multiple top-level objects specified, an aggregate root to contain them all will be generate
 		bool AutoRoot;
 
-
 		//Nested objects
 		Settings_InputObj Input;
 		Settings_OutputObj Output;
@@ -128,6 +127,7 @@ class SettingsObj : public JSL::Parameter::Aggregator
 			AddCommand("resume", "Resumes any active watcher routines");
 			AddCommand("shutdown", "Shuts down any active watcher routines");
 			AddCommand("watch", "Launches a watcher routine");
+			AddCommand("status", "Queries an active watcher as to its status");
 		}
 	private:
 		//Hidden configurables

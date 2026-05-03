@@ -1,0 +1,39 @@
+#!/bin/bash
+
+POPOUT=false
+
+if [ "$1" == "pop" ]; then #do as a while to prevent recursion - pop pop!
+    # Consume the first argument
+    POPOUT=true
+    set -- "watch" "${@:2}"
+fi
+
+
+
+
+if [ $POPOUT == true ]; then
+    echo "Now do something cool"
+
+    # Try terminals in order of "modernity"
+  
+    if command -v gnome-terminal &> /dev/null; then
+        gnome-terminal --title="HSON Watcher ($TARGET_FILE)" -- bash "$0" $@ &
+        exit 0
+    elif command -v konsole &> /dev/null; then
+        konsole -p "WindowTitle=HSON Watcher" -e bash "$0" $@  &
+        exit 0
+    elif command -v uxterm &> /dev/null; then
+        uxterm -bg grey19 -fg white -T "HSON Watcher" -fa 'Monospace' -e bash "$0" $@ &
+        exit 0
+    elif command -v xterm &> /dev/null; then
+        xterm -T "HSON Watcher" -fa 'Monospace' -fs 11 -e bash "$0" $@ &
+        exit 0
+    else
+        echo "Warning: No preferred terminal emulator found. Running in-place..."
+    fi
+fi
+
+
+
+echo "Launching SSB"
+./ssb_run $@

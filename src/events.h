@@ -15,6 +15,7 @@ class EventHandler
 
 
 		void ProcessCommand(std::string_view cmd);
+		bool Paused = false;
 };
 
 

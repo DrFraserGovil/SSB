@@ -1,6 +1,7 @@
 #include "events.h"
 #include <JSL.h>
 #include "settings.hpp"
+#include "file.h"
 
 void ContingencyPlan(std::vector<fs::path> files)
 {
@@ -86,11 +87,25 @@ EventHandler::EventHandler(std::vector<fs::path> files, JSL::Watcher & watcher) 
 	});
 
 
-    Watcher.SetInotifyCallback([](auto msg){
+    Watcher.SetInotifyCallback([this](auto msg){
         LOG(INFO) << "inotify pinged " << msg.Path.string();
+
+
+        if (!(msg.Mask & IN_IGNORED) &&  fs::exists(msg.Path))
+        {
+            if (!Paused)
+            {
+                SSBFile::Convert(msg.Path);
+            }
+        }
+        else
+        {
+            Watcher.Unwatch(msg.Path);
+            LOG(INFO) << msg.Path.string() << " no longer on disk.";
+        }
     });
 
-	Watcher.SetBlockingTime(1);
+	Watcher.SetBlockingTime(4);
     Watcher.SetDebounce(Settings.Watcher.Debounce);
 	Watcher.SetMaxRuntime(Settings.Watcher.IdleTimeout);
 
@@ -99,7 +114,7 @@ EventHandler::EventHandler(std::vector<fs::path> files, JSL::Watcher & watcher) 
         Watcher.Watch(file);
     }
 
-	JSL::Log::Global::Config.SetPrompt(JSL::Format::Blue + ">> " + JSL::Format::Cyan);
+	JSL::Log::Global::Config.SetPrompt(JSL::Format::Yellow + ">> " + JSL::Format::Cyan);
 	LOG(INFO) << "Beginning watcher routine";
 	Watcher.Run();
 	JSL::Log::Global::Config.ResetPrompt();
@@ -124,9 +139,18 @@ void EventHandler::SendCommand(std::string_view cmd)
 void EventHandler::ProcessCommand(std::string_view cmd)
 {
     auto q= JSL::split(JSL::getLower(cmd)," ");
-    if (q[0] == "filewatch")
+    if (q[0] == "filewatch" || q[0] == "watch")
     {
         LOG(INFO) << "Watching " << q[1];
         Watcher.Watch(q[1]);
     }
+    if (q[0] == "pause")
+    {
+        Paused = true;
+    }
+    if (q[0] == "resume")
+    {
+        Paused = false;
+    }
+
 }
