@@ -114,7 +114,7 @@ EventHandler::EventHandler(std::vector<fs::path> files, JSL::Watcher & watcher) 
         Watcher.Watch(file);
     }
 
-	JSL::Log::Global::Config.SetPrompt(JSL::Format::Yellow + ">> " + JSL::Format::Cyan);
+	JSL::Log::Global::Config.SetPrompt(JSL::Format::Blue + ">> " + JSL::Format::Cyan);
 	LOG(INFO) << "Beginning watcher routine";
 	Watcher.Run();
 	JSL::Log::Global::Config.ResetPrompt();
@@ -152,5 +152,39 @@ void EventHandler::ProcessCommand(std::string_view cmd)
     {
         Paused = false;
     }
+    if (q[0] == "help")
+    {
+        Settings.HelpMenu();
+    }
+
+    if (q[0] == "status")
+    {
+        LOG(INFO) << "-- SSB STATUS --";
+        auto a = Watcher.GetWatchedFiles();
+        if (!a.empty())
+        {
+            LOG(INFO) << "Compiler:  " << (Paused ? JSL::Format::Red + "Paused" : JSL::Format::Green + "Running");
+            std::ostringstream os;
+            os << "Watching:  " << JSL::Format::Italics;
+            bool isFirst = true;
+            for (auto f : a)
+            {
+                if (!isFirst)
+                {
+                    os << "\n" <<  std::string(11,' ');
+                }
+                isFirst = false;
+                os << f.string();
+            }
+            LOG(INFO) << os.str();
+        }
+        else
+        {
+            LOG(INFO) << "Compiler:  " << JSL::Format::Yellow + JSL::Format::Bold << "Waiting for files";
+        }
+        auto rt = Watcher.GetRuntime();
+        LOG(INFO) <<  "Uptime:    " << JSL::FormatDuration(rt.count() * 1.0 / 1e9) << JSL::Format::Cyan + JSL::Format::Italics<< " (timeout after " << JSL::FormatDuration(Settings.Watcher.IdleTimeout * 60) <<")";
+    }
+
 
 }

@@ -2,13 +2,15 @@ Settings : global
 {
 	Commands
 	{
-		build : default {"Builds the selected file"}
+		build : default {"Builds the selected file(s)"}
 		pause {"Pauses any active watcher routines"}
-		[filename] {"The name of the file to be acted upon. Must not share a name with any of the other commands"}
+		[filename] {"The name(s) of the file(s) to be acted upon. Must not share a name with any of the other commands"}
 		resume {"Resumes any active watcher routines"}
 		shutdown {"Shuts down any active watcher routines"}
-		watch {"Launches a watcher routine"}
+		watch {"Launches a watcher routine, or adds the specified files to an extant watcher/"}
 		status{"Queries an active watcher as to its status"}
+		popout {"Launches a watcher process in an external window"}
+
 	}
 	Members
 	{
@@ -29,9 +31,7 @@ Settings : global
 		{
 			trigger= r,root
 			note = "If true and multiple top-level objects specified, an aggregate root to contain them all will be generated"
-		}
-
-		
+		}		
 	}
 	CATEGORIES //just to prove case independence & comment stripping
 	{

@@ -1,7 +1,7 @@
 #include "parse.h"
 #include "JSL.h"
 
-
+#include "trace.h"
 std::string stringify(std::string_view word)
 {
 	if (word.empty()){return "\"\"";}
@@ -10,7 +10,8 @@ std::string stringify(std::string_view word)
 
 std::string ParsedSetting::ProcessKeys()
 {
-	std::string_view val = Keys;
+	std::string_view val = JSL::trim_view(Keys);
+	if (val.empty()) return "";
 	auto & keyRegister = RegisteredKeys();
 	std::ostringstream os;
 	std::vector<char> badChar = {'{','}',']','[','(',')','-'};
@@ -24,12 +25,14 @@ std::string ParsedSetting::ProcessKeys()
 	}
 
 	auto v = JSL::split(val,",");
+	
+	if (v.empty()) return "";
 	for (auto & cmd : v)
 	{
 		cmd = stringify(JSL::trim_view(cmd));
 		if (JSL::contains(std::string{cmd},keyRegister))
 		{
-			LOG(ERROR) << "The key " << cmd << " is already in use (Encountered in " << Type << " " << Name << ")";
+			TRACE << "The key " << cmd << " is already in use (Encountered in " << Type << " " << Name << ")";
 			throw std::runtime_error("Duplicate key");
 		}
 		keyRegister.push_back(cmd);
@@ -56,7 +59,7 @@ ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data
 	}
 	else
 	{
-		LOG(ERROR) << "Could not locate type for parameter '" << name << "'";
+		TRACE << "Could not locate type for parameter '" << name << "'";
 		return;
 	}
 	
@@ -74,7 +77,7 @@ ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data
 
 		if (splitter == std::string_view::npos)
 		{
-			LOG(ERROR) << "Setting specifications must take the value [key] = [value] (" << cmd << ")";
+			TRACE << "Setting specifications must take the value [key] = [value] (" << cmd << ")";
 			return;
 		}
 		
@@ -98,7 +101,7 @@ ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data
 			continue;
 		}
 
-		LOG(ERROR) << "Unknown command '" << key << "' encountered in " << el;
+		TRACE << "Unknown command '" << key << "' encountered in " << el;
 		return;
 	}
 
@@ -110,21 +113,21 @@ ParsedSetting::ParsedSetting(std::string_view name, std::deque<std::string> data
 
 	if (Default.size() == 0)
 	{
-		LOG(ERROR) << "No default value provided for " << Name;
+		TRACE << "No default value provided for " << Name;
 		return;	
 	}
 
 	if (Note.size() == 0)
 	{
-		LOG(ERROR) << "No description provided for " << Name;
+		TRACE << "No description provided for " << Name;
 		return;
 	}
 	Note = stringify(Note);
 
 	Keys = ProcessKeys();
-	if (Keys.size() == 0)
+	if (Keys.size() <=  2 || Keys.empty())
 	{	
-		LOG(ERROR) << "No valid triggers provided for " << Name;
+		TRACE << "No valid triggers provided for " << Name;
 		return;
 	}
 	ConfigName = "config" + Name;
@@ -150,7 +153,7 @@ void ParsedSetting::ConfigDeclare(std::ostringstream & os)
 	os << "\t\tJSL::Parameter::Setting<" << Type <<"> " << ConfigName <<";\n";
 }
 
-void ParsedSetting::Set(std::ostringstream & os)
+void ParsedSetting::Set(std::ostringstream & os) 
 {
 	os << "\t\t\tSet(" << Name << ", " << ConfigName << ", (" << Type << ")" << Default << ", " << Keys << ", " << stringify(Name) << ", " << Note << ");\n";
 }

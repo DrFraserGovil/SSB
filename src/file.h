@@ -18,5 +18,4 @@ class SSBFile
         bool ConstructAggregators();
         bool ExtractContents();
 
-        
 };

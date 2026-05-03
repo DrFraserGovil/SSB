@@ -3,7 +3,7 @@
 #include <map>
 #include <functional>
 #include <regex>
-
+#include "trace.h"
 
 bool captureBlock(std::vector<ContentBlock> contents, std::function<bool(ContentBlock block,std::string)> process)
 {
@@ -21,7 +21,7 @@ bool captureBlock(std::vector<ContentBlock> contents, std::function<bool(Content
 		{
 			if ((capture == ""))
 			{
-				LOG(ERROR) << "Unheaded block found";
+				TRACE << "Unheaded block found";
 				return false;
 			}
 
@@ -74,7 +74,7 @@ ParsedAggregator::ParsedAggregator(std::string_view name, ContentBlock contents)
 	
 	if (JSL::split_view(name," ").size() > 1)
 	{
-		LOG(ERROR) << "Aggregator names cannot contain spaces (" << name <<")";
+		TRACE << "Aggregator names cannot contain spaces (" << name <<")";
 		return;
 	}
 	Name = name;
@@ -90,7 +90,7 @@ ParsedAggregator::ParsedAggregator(std::string_view name, ContentBlock contents)
 		{
 			if (Extracted.contains(capture))
 			{
-				LOG(ERROR) << "Duplicate " << capture << " header inside " << name;
+				TRACE << "Duplicate " << capture << " header inside " << name;
 				return false;
 			}
 			Extracted.insert(capture);
@@ -109,7 +109,7 @@ ParsedAggregator::ParsedAggregator(std::string_view name, ContentBlock contents)
 		}
 		else
 		{
-			LOG(ERROR) << "Unknown block header: '" << capture << "'";
+			TRACE << "Unknown block header: '" << capture << "'";
 			return false;
 		}
 		return true;
@@ -233,7 +233,7 @@ bool ParsedAggregator::GetCommands(ContentBlock contents)
 
 		if (JSL::split_view(capture," ").size() > 1)
 		{
-			LOG(ERROR) << "Command names cannot contain spaces";
+			TRACE << "Command names cannot contain spaces";
 			return false;
 		}
 		Commands.emplace_back(capture,stringify(os.str()),isdefault);
@@ -271,7 +271,7 @@ bool ParsedAggregator::GetMembers(ContentBlock contents)
 			return true;
 		}
 
-		LOG(ERROR) << "Could not initialise settings member " << capture;
+		TRACE << "Could not initialise settings member " << capture;
 		return false;
 	});
 	return r;

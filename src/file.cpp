@@ -2,6 +2,7 @@
 #include <JSL.h>
 #include <stack>
 #include "settings.hpp"
+#include "trace.h"
 namespace fs = std::filesystem;
 
 SSBFile::SSBFile(fs::path path) : Path(path), Contents{}
@@ -17,7 +18,11 @@ SSBFile::SSBFile(fs::path path) : Path(path), Contents{}
 
 void SSBFile::Convert(fs::path path)
 {
+
     auto file = SSBFile(path);
+
+
+    fs::path logfile = path.string() + ".log";
 
     if (file.StatusGood)
     {
@@ -41,13 +46,26 @@ void SSBFile::Convert(fs::path path)
         LOG(INFO) << "Writing output to " << outpath.string();
 
         file.WriteTo(outpath);
+
+        if (fs::exists(logfile))
+        {
+            fs::remove(logfile);
+        }
     }
     else
     {
-        LOG(ERROR) << "Could not complete compilation of file " << path.filename();
+
         if (Settings.BuildFailIsError)
         {
             throw std::runtime_error("Bad compile");
+        }
+        else
+        {
+            TRACE << "Could not complete compilation of file " << path.filename();
+            
+            auto stack = Trace::Flush();
+
+            JSL::writeStringToFile(logfile,stack,std::ios::out);
         }
     }
 }
@@ -70,16 +88,20 @@ bool isPure(std::string_view line)
 
 bool SSBFile::ExtractContents()
 {
+    ParsedSetting::RegisteredKeys().clear();
     auto lines = JSL::getFileLines(Path);
     std::stack<ContentBlock *> parents;
 
     std::stack<char> quotes;
 
     parents.push(&Contents);
-
     for (size_t l = 0; l < lines.size(); ++l)
     {
-        std::string_view line = lines[l];
+        std::string_view line = JSL::trim_view(lines[l]);
+
+        if (line.empty()) continue;
+        
+
 
         if (isPure(line))
         {
@@ -124,7 +146,7 @@ bool SSBFile::ExtractContents()
                     }
                     else
                     {
-                        LOG(ERROR) << "Mismatched braces found on line " << l << " of " << Path.filename();
+                        TRACE << "Mismatched braces found on line " << l << " of " << Path.filename();
                         return false;
                     }
                 }
@@ -140,7 +162,7 @@ bool SSBFile::ExtractContents()
     }
     if (parents.size() > 1)
     {
-        LOG(ERROR) << "Unclosed braces found in " << Path.filename();
+        TRACE << "Unclosed braces found in " << Path.filename();
         return false;
     }
     return true;
@@ -161,7 +183,7 @@ bool SSBFile::ConstructAggregators()
             {
                 if (JSL::contains(n,names))
                 {
-                    LOG(ERROR) << "Duplicate construct name found at root level: " << n;
+                    TRACE << "Duplicate construct name found at root level: " << n;
                     return false;
                 }
                 names.push_back(n);
@@ -194,7 +216,7 @@ bool SSBFile::ConstructAggregators()
         }
         else
         {
-            LOG(ERROR) << "Multiple top-level objects specified: cannot deduce entry point. Run with '-r' to rectify.";
+            TRACE << "Multiple top-level objects specified: cannot deduce entry point. Run with '-r' to rectify.";
             return false;
         }
 
@@ -203,7 +225,7 @@ bool SSBFile::ConstructAggregators()
 
     if (nBlocks != 1)
     {
-        LOG(ERROR) << Path.filename().string() << " is not a valid SSB file\n" << ((nBlocks == 0) ? "No blocks found " : "Unheaded blocks detected");
+        TRACE << Path.filename().string() << " is not a valid SSB file\n" << ((nBlocks == 0) ? "No blocks found " : "Unheaded blocks detected");
         return false;
     }
 
@@ -244,3 +266,4 @@ bool SSBFile::WriteTo(fs::path output)
     }
     return true;
 }
+

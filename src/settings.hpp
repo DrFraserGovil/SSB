@@ -121,13 +121,14 @@ class SettingsObj : public JSL::Parameter::Aggregator
 			NestGroup(Input,"Input");
 			NestGroup(Output,"Output");
 			NestGroup(Watcher,"Watcher");
-			DefaultCommand("build", "Builds the selected file");
+			DefaultCommand("build", "Builds the selected file(s)");
 			AddCommand("pause", "Pauses any active watcher routines");
-			AddCommand("[filename]", "The name of the file to be acted upon. Must not share a name with any of the other commands");
+			AddCommand("[filename]", "The name(s) of the file(s) to be acted upon. Must not share a name with any of the other commands");
 			AddCommand("resume", "Resumes any active watcher routines");
 			AddCommand("shutdown", "Shuts down any active watcher routines");
-			AddCommand("watch", "Launches a watcher routine");
+			AddCommand("watch", "Launches a watcher routine, or adds the specified files to an extant watcher/");
 			AddCommand("status", "Queries an active watcher as to its status");
+			AddCommand("popout", "Launches a watcher process in an external window");
 		}
 	private:
 		//Hidden configurables
