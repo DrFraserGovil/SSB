@@ -10,7 +10,6 @@ fi
 
 
 if [ $POPOUT == true ]; then
-    echo "Now do something cool"
 
     # Try terminals in order of "modernity"
   

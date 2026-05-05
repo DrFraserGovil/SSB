@@ -4,19 +4,24 @@
 namespace fs = std::filesystem;
 
 
-class EventHandler
-{
-	public:
-		static void Run(std::vector<fs::path> files);
-		static void SendCommand(std::string_view cmd);
-	private:
-		EventHandler(std::vector<fs::path> files, JSL::Watcher & watcher);
-		JSL::Watcher Watcher;
+void ActivateEventLoop(std::vector<fs::path> files);
+
+void IPC_Message(std::string_view cmd);
 
 
-		void ProcessCommand(std::string_view cmd);
-		bool Paused = false;
-};
+// class EventHandler : public JSL::ParallelEventManager
+// {
+// 	public:
+// 		static void Run(
+// 		static void SendCommand(std::string_view cmd);
+// 	private:
+// 		EventHandler(std::vector<fs::path> files, size_t ncores, JSL::Watcher & watcher);
+// 		// JSL::Watcher Watcher;
+
+
+// 		void ProcessCommand(std::string_view cmd);
+// 		bool Paused = false;
+// };
 
 
 

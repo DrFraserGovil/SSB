@@ -19,15 +19,15 @@ void ContingencyPlan(std::vector<fs::path> files)
 		{
 			auto sender = JSL::Antenna::Hotline::Create(Settings.Watcher.Socket,2);
 			
-            if (!sender)
-            {
-                return;
-            }
+			if (!sender)
+			{
+				return;
+			}
 			bool response = true;
 			for (auto & file: files)
 			{
-                response &= sender->Send("filewatch " + file.string());
-                LOG(DEBUG) << "watch " << file.string() << " " << response;
+				response &= sender->Send("filewatch " + file.string());
+				LOG(DEBUG) << "watch " << file.string() << " " << response;
 			}
 
 			
@@ -50,82 +50,149 @@ void ContingencyPlan(std::vector<fs::path> files)
 	}
 }
 
-void EventHandler::Run(std::vector<fs::path> files)
+
+void ProcessCommand(std::string_view cmd, bool & Paused, JSL::Watcher * Watch)
 {
-    auto watcher = JSL::Watcher::Create(Settings.Watcher.Socket, Settings.Watcher.ReplyTimeout, Settings.Watcher.ForceAcquire);
+	cmd = JSL::trim_view(cmd);
 
-    if (!watcher)
-    {
-        LOG(INFO) << "Could not establish initial connection";
-        ContingencyPlan(files);
-        return;
-    }
 
-    EventHandler handler(files,watcher.value());
+	auto q= JSL::split(JSL::getLower(cmd)," ");
+	if (q[0] == "filewatch" || q[0] == "watch")
+	{
+		LOG(INFO) << "Watching " << q[1];
+		Watch->Watch(q[1]);
+	}
+	if (cmd == "pause")
+	{
+		Paused = true;
+	}
+	if (cmd== "resume")
+	{
+		Paused = false;
+	}
+	if (cmd == "help")
+	{
+		Settings.HelpMenu();
+	}
+
+	if (cmd == "status")
+	{
+		LOG(INFO) << "-- SSB STATUS --";
+		auto a = Watch->GetWatchedFiles();
+		if (!a.empty())
+		{
+			LOG(INFO) << "Compiler:  " << (Paused ? JSL::Format::Red + "Paused" : JSL::Format::Green + "Running");
+			std::ostringstream os;
+			os << "Watching:  " << JSL::Format::Italics;
+			bool isFirst = true;
+			for (auto f : a)
+			{
+				if (!isFirst)
+				{
+					os << "\n" <<  std::string(11,' ');
+				}
+				isFirst = false;
+				os << f.string();
+			}
+			LOG(INFO) << os.str();
+		}
+		else
+		{
+			LOG(INFO) << "Compiler:  " << JSL::Format::Yellow + JSL::Format::Bold << "Waiting for files";
+		}
+		auto rt = Watch->GetRuntime();
+		LOG(INFO) <<  "Uptime:    " << JSL::FormatDuration(rt.count() * 1.0 / 1e9) << JSL::Format::Cyan + JSL::Format::Italics<< " (timeout after " << JSL::FormatDuration(Settings.Watcher.IdleTimeout * 60) <<")";
+	}
+
+
 }
 
-EventHandler::EventHandler(std::vector<fs::path> files, JSL::Watcher & watcher) : Watcher(std::move(watcher))
+
+void ActivateEventLoop(std::vector<fs::path> files)
 {
-    Watcher.SetCInCallback([this](auto msg)
+	LOG(DEBUG) << "Initialising event loop";
+	auto watcher = JSL::Watcher::Create(Settings.Watcher.Socket, Settings.Watcher.ReplyTimeout, Settings.Watcher.ForceAcquire);
+
+	if (!watcher)
 	{
-		if (!msg.empty())
+		LOG(INFO) << "Could not establish initial connection";
+		ContingencyPlan(files);
+		return;
+	}
+
+	size_t ncores =3;
+	JSL::ParallelEventManager Manager(ncores,watcher.value());
+   
+	bool Paused = false;
+
+	std::string_view prompt = ">> ";
+	if (JSL::Terminal::IsANSICapable())
+	{
+		prompt = JSL::Format::Blue + ">> " + JSL::Format::Cyan;
+	}
+	JSL::Watcher * watch = Manager.GetWatcher();
+	Manager.SetCInCallback([prompt,&Paused,watch](auto msg)
+	{
+		if (!JSL::trim_view(msg).empty())
 		{
-			if (JSL::iEquals(msg,"shutdown") || JSL::iEquals(msg,"exit"))
-			{
-				Watcher.Message(msg);
-			} // this has a cascade that shuts down the sockets
-            else
-            {
-                ProcessCommand(msg);
-            }
+			ProcessCommand(msg,Paused,watch);
 		}
-		LOG(INFO) << JSL::Terminal::CursorUp;
+		else
+		{
+			if (JSL::Terminal::IsANSICapable())
+			{
+				std::cout << JSL::Terminal::CursorUp;
+			}
+		}
+		std::cout << JSL::Terminal::ClearLine << prompt <<std::flush;
 	});
-	Watcher.SetSocketCallback([this](auto msg){
-		ProcessCommand(msg);
-		LOG(INFO) << JSL::Terminal::CursorUp;
+
+	Manager.SetSocketCallback([prompt,&Paused,watch](auto msg){
+		ProcessCommand(msg,Paused,watch);
+		std::cout << JSL::Terminal::ClearLine << prompt <<std::flush;
 	});
 
 
-    Watcher.SetInotifyCallback([this](auto msg){
-        LOG(INFO) << "inotify pinged " << msg.Path.string();
+	Manager.SetInotifyCallback([prompt,&Paused,watch](auto msg){
+		LOG(INFO) << "inotify pinged " << msg.Path.string();
 
 
-        if (!(msg.Mask & IN_IGNORED) &&  fs::exists(msg.Path))
-        {
-            if (!Paused)
-            {
-                SSBFile::Convert(msg.Path);
-            }
-        }
-        else
-        {
-            Watcher.Unwatch(msg.Path);
-            LOG(INFO) << msg.Path.string() << " no longer on disk.";
-        }
-    });
+		if (!(msg.Mask & IN_IGNORED) &&  fs::exists(msg.Path))
+		{
+			if (!Paused)
+			{
+				SSBFile::Convert(msg.Path);
+			}
+		}
+		else
+		{
+			watch->Unwatch(msg.Path);
+			LOG(INFO) << msg.Path.string() << " no longer on disk.";
+		}
+		std::cout << JSL::Terminal::ClearLine << prompt <<std::flush;
+	});
 
-	Watcher.SetBlockingTime(4);
-    Watcher.SetDebounce(Settings.Watcher.Debounce);
-	Watcher.SetMaxRuntime(Settings.Watcher.IdleTimeout);
+	watch->SetBlockingTime(4);
+	watch->SetDebounce(Settings.Watcher.Debounce);
+	watch->SetMaxRuntime(Settings.Watcher.IdleTimeout);
 
-    for (auto & file : files)
-    {
-        Watcher.Watch(file);
-    }
+	for (auto & file : files)
+	{
+		watcher->Watch(file);
+	}
 
-	JSL::Log::Global::Config.SetPrompt(JSL::Format::Blue + ">> " + JSL::Format::Cyan);
+	JSL::Log::Global::Config.SetPrompt(prompt);
 	LOG(INFO) << "Beginning watcher routine";
-	Watcher.Run();
+	
+	Manager.Run();
+
 	JSL::Log::Global::Config.ResetPrompt();
 	LOG(INFO) << "Watcher has shut down";
 }
 
 
-void EventHandler::SendCommand(std::string_view cmd)
+void IPC_Message(std::string_view cmd)
 {
-	// auto sender = JSL::Antenna::Create(loc.string());
-
 	if (JSL::Antenna::Transmit(Settings.Watcher.Socket,cmd,Settings.Watcher.ReplyTimeout))
 	{
 		LOG(INFO) << "Message acknowledged";
@@ -134,57 +201,4 @@ void EventHandler::SendCommand(std::string_view cmd)
 	{
 		LOG(ERROR) << "Message not acknowledged by host";
 	}
-}
-
-void EventHandler::ProcessCommand(std::string_view cmd)
-{
-    auto q= JSL::split(JSL::getLower(cmd)," ");
-    if (q[0] == "filewatch" || q[0] == "watch")
-    {
-        LOG(INFO) << "Watching " << q[1];
-        Watcher.Watch(q[1]);
-    }
-    if (q[0] == "pause")
-    {
-        Paused = true;
-    }
-    if (q[0] == "resume")
-    {
-        Paused = false;
-    }
-    if (q[0] == "help")
-    {
-        Settings.HelpMenu();
-    }
-
-    if (q[0] == "status")
-    {
-        LOG(INFO) << "-- SSB STATUS --";
-        auto a = Watcher.GetWatchedFiles();
-        if (!a.empty())
-        {
-            LOG(INFO) << "Compiler:  " << (Paused ? JSL::Format::Red + "Paused" : JSL::Format::Green + "Running");
-            std::ostringstream os;
-            os << "Watching:  " << JSL::Format::Italics;
-            bool isFirst = true;
-            for (auto f : a)
-            {
-                if (!isFirst)
-                {
-                    os << "\n" <<  std::string(11,' ');
-                }
-                isFirst = false;
-                os << f.string();
-            }
-            LOG(INFO) << os.str();
-        }
-        else
-        {
-            LOG(INFO) << "Compiler:  " << JSL::Format::Yellow + JSL::Format::Bold << "Waiting for files";
-        }
-        auto rt = Watcher.GetRuntime();
-        LOG(INFO) <<  "Uptime:    " << JSL::FormatDuration(rt.count() * 1.0 / 1e9) << JSL::Format::Cyan + JSL::Format::Italics<< " (timeout after " << JSL::FormatDuration(Settings.Watcher.IdleTimeout * 60) <<")";
-    }
-
-
 }

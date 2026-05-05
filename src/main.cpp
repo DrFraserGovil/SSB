@@ -3,7 +3,6 @@
 #include <filesystem>
 #include "file.h"
 #include "events.h"
-// #include "../tst.hpp"
 SettingsObj Settings;
 
 namespace fs = std::filesystem;
@@ -90,12 +89,12 @@ int main(int argc, char **argv)
 		}
 		if (cmd == "watch")
 		{
-			EventHandler::Run(files);
+			ActivateEventLoop(files);
 			return 0;
 		}
 		else
 		{
-			EventHandler::SendCommand(cmd);
+			IPC_Message(cmd);
 		}
 
 	}
