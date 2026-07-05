@@ -1,9 +1,9 @@
 
-######## SSB specific 
+######## LSJ  specific 
 
 .jvim.session
-ssb
-
+lsj
+old_src
 ######### Standard CPP ignores
 
 
