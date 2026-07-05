@@ -9,32 +9,33 @@ add_compile_options(-O3 -Wall)
 # create executable in current directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 #find all source files
-file(GLOB_RECURSE ALL_SOURCES "*.cpp")
+file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
 list(FILTER ALL_SOURCES EXCLUDE REGEX ".build/.*")
 set(CORE_SOURCES ${ALL_SOURCES})
 
-add_executable(ssb_run ${CORE_SOURCES})
+add_executable(ssb ${CORE_SOURCES})
 
 
 # Link libraries
 
-### For development purposes, it is quicker and easier to use the local libraru
+### For development purposes, it is quicker and easier to use the local library
 ### But other people will need to download it
-set(LOCAL_JSL "${CMAKE_CURRENT_SOURCE_DIR}/../JSL")
-if(EXISTS "${LOCAL_JSL}/CMakeLists.txt")
+
+option(FORCE_JSL_CLONE "Force a JSL clone instead of using a local copy" OFF)
+ 
+set(LOCAL_JSL "/home/jfg/CodeProjects/JSL")
+if((NOT FORCE_JSL_CLONE) AND (EXISTS "${LOCAL_JSL}/CMakeLists.txt"))
     message(STATUS "Using local JSL from ${LOCAL_JSL}")
     add_subdirectory("${LOCAL_JSL}" "${CMAKE_CURRENT_BINARY_DIR}/jsl_build")
 else()
-    message(STATUS "Local JSL not found. Fetching from Git...")
+	message(STATUS "Using JSL from github")
     include(FetchContent)
         FetchContent_Declare(
-        jsl
+		JSL
         GIT_REPOSITORY https://github.com/DrFraserGovil/JSL.git
-        GIT_TAG        deheader  
+        GIT_TAG        v3.0.1  
     )
     FetchContent_MakeAvailable(JSL)
 endif()
 
-
-
-target_link_libraries(ssb_run PRIVATE JSL)
+target_link_libraries(ssb PRIVATE JSL)
