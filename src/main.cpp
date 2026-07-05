@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "header.h"
 #include <JSL.h>
 #include <filesystem>
 #include <vector>
@@ -15,7 +16,8 @@ void Initialise(int argc, char **argv)
 	{
 		JSL::Log::Global().Level = ERROR;
 	}
-	LOG(DEBUG) << "Automator Initialised";
+	JSL::Log::Global().ShowHeaders = false;
+	LOG(DEBUG) << "LSJ Initialised";
 }
 namespace fs = std::filesystem;
 std::vector<fs::path> GetTargets()
@@ -63,4 +65,9 @@ int main(int argc, char **argv)
 {
 	Initialise(argc, argv);
 	auto targets = GetTargets();
+
+	for (auto f : targets)
+	{
+		auto file = HeaderFile(f);
+	}
 }
