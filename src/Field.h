@@ -1,17 +1,8 @@
 #pragma once
+#include <optional>
+#include <set>
 #include <string>
-class JSLField
-{
-  public:
-	std::string Type;
-	std::string Identifier;
-	std::string DefaultValue;
-	std::string CommentBlock;
-	int Line;
-	bool IsJSLConfigurable = false;
-
-	JSLField(std::string type, std::string id, std::string val, int line);
-};
+#include <vector>
 
 class Nested
 {
@@ -22,4 +13,21 @@ class Nested
 	bool IsJSLConfigurable = false;
 
 	Nested(std::string type, std::string id, int line);
+	std::string Format(std::string_view wrapper = "t");
+};
+class JSLField
+{
+  public:
+	std::string Type;
+	std::string Identifier;
+	std::string DefaultValue;
+	std::string DisplayName;
+	int Line;
+
+	JSLField(std::string type, std::string id, std::string val, int line);
+	JSLField(Nested notCapured);
+	std::optional<std::string> ProcessComments(std::vector<std::string> comments);
+	std::set<std::string> Aliases;
+	std::string Documentation;
+	std::string Format(std::string_view wrapper, std::string nspace);
 };

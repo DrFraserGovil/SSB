@@ -1,20 +1,16 @@
 #include "header.h"
 #include "Class.h"
 #include "JSL/IO/GetFile.h"
+#include "Settings.h"
 #include <JSL/Log.h>
 #include <JSL/Strings/Trim.h>
 #include <regex>
-
 HeaderFile::HeaderFile(fs::path file) : File(file)
 {
 
 	LOG(INFO) << " - Scanning " << file;
 
 	Lines = JSL::IO::getFileLines(file);
-	FindClasses();
-}
-void HeaderFile::Scan()
-{
 	FindClasses();
 }
 
@@ -79,17 +75,78 @@ void HeaderFile::FindClasses()
 			}
 
 			// Classes.emplace_back(classcatch, lineStart, lineEnd);
-			ClassDeclare newClass(classcatch, lineStart, lineEnd);
+			ClassDeclare newClass(classcatch, File, Lines, lineStart, lineEnd);
 			if (newClass.IsJSLConfigurable)
 			{
-				newClass.GetFields(Lines, foundNames);
 				Classes[newClass.Name] = newClass;
-				foundNames.push_back(newClass.Name);
 			}
 		}
 		else
 		{
 			++i;
 		}
+	}
+}
+void HeaderFile::RegisterClassNames(std::vector<std::string> &registry)
+{
+	for (auto &[_, c] : Classes)
+	{
+		registry.push_back(c.Name);
+	}
+}
+void HeaderFile::GetFields(const std::vector<std::string> &registry)
+{
+	for (auto &[name, obj] : Classes)
+	{
+		obj.GetFields(registry);
+	}
+}
+
+void HeaderFile::PrepareOutput()
+{
+	LOG(INFO) << File << "is writing";
+	std::map<std::string, std::string> tweaks;
+	for (auto &[name, obj] : Classes)
+	{
+		auto tweaked = obj.WriteToFile();
+		if (tweaked)
+		{
+			tweaks[name] = tweaked.value();
+		}
+	}
+
+	if (!tweaks.empty())
+	{
+		auto hidden = File.parent_path() / ("." + File.filename().string() + ".bak");
+		LOG(WARN) << "Altering source code; backup can be found at " << hidden.string();
+		if (std::filesystem::exists(hidden))
+		{
+			std::filesystem::remove(hidden);
+		}
+		std::filesystem::copy(File, hidden);
+		std::ostringstream os;
+		for (size_t i = 0; i < Lines.size(); ++i)
+		{
+			int jumpto = -1;
+			for (auto [name, tweak] : tweaks)
+			{
+				if (Classes[name].StartLine == (int)i)
+				{
+					os << tweak << "\n";
+					jumpto = Classes[name].EndLine;
+					break;
+				}
+			}
+			if (jumpto > 0)
+			{
+				i = jumpto;
+			}
+			else
+			{
+				os << Lines[i] << "\n";
+			}
+		}
+
+		JSL::IO::writeString(File, os.str());
 	}
 }

@@ -67,10 +67,18 @@ int main(int argc, char **argv)
 	{
 		Initialise(argc, argv);
 		auto targets = GetTargets();
-
+		std::vector<HeaderFile> headers;
+		std::vector<std::string> registry;
 		for (auto f : targets)
 		{
-			auto file = HeaderFile(f);
+			headers.emplace_back(f);
+			headers.back().RegisterClassNames(registry);
+		}
+
+		for (auto header : headers)
+		{
+			header.GetFields(registry);
+			header.PrepareOutput();
 		}
 	}
 	catch (const std::exception &e)
