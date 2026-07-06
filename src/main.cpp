@@ -63,11 +63,20 @@ std::vector<fs::path> GetTargets()
 
 int main(int argc, char **argv)
 {
-	Initialise(argc, argv);
-	auto targets = GetTargets();
-
-	for (auto f : targets)
+	try
 	{
-		auto file = HeaderFile(f);
+		Initialise(argc, argv);
+		auto targets = GetTargets();
+
+		for (auto f : targets)
+		{
+			auto file = HeaderFile(f);
+		}
+	}
+	catch (const std::exception &e)
+	{
+		std::cerr << "Critical error encountered\n"
+				  << e.what();
+		exit(1);
 	}
 }
