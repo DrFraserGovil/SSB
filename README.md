@@ -1,5 +1,4 @@
-LSJ: The JSL Mirror
-=================================
+# LSJ: The JSL Mirror
 
 
 LSJ is a tool for performing the compile-time reflection required for the ``Interface`` module of the [JSL](https://github.com/DrFraserGovil/JSL). 
@@ -10,8 +9,7 @@ The field list for each class is written to a file (usually ``targetfile.classna
 
 The LSJ is designed to allow a user to integrate it into their compilation routine, with the source code for the parsers being a valid C++ file. This means an LSP can track newly added symbols without needing to wait for a compilaton call, or having a dynamic file watcher.
 
-Install
---------
+## Install
 
 This tool can be acquired in the following way:
 
@@ -23,8 +21,7 @@ make
 
 Compiling this requires either a copy of the JSL library to be on your $PATH, or an internet connection sufficient for the ``FetchContent`` directive to clone a copy to the build directory.
   
-Usage
-----------
+## Usage
 
 Basic usage:
 
@@ -83,8 +80,7 @@ help               Activates the help display, then exits (equivalent to -h)
 
 
 
-Syntax
----------------------
+## Syntax
 
 LSJ uses a doxygen-like syntax to convert POD classes into configurable entities in a nested heirarchy. 
 
@@ -116,8 +112,7 @@ class Object : public JSL::Interface::Aggregator<Object>
 
 ```
 
-Notes
-++++++++
+### Notes
 
 1. Members which do not declare a ``@alias`` and ``@brief`` field **will be omitted** from the reflection pipeline; this allows some 'static' members which cannot be altered.
 2. Metadata for a class or a field must be declared in lines directly above the element they are referring to; blank lines sever the connection. 
