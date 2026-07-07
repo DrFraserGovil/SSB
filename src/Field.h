@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -31,3 +32,4 @@ class JSLField
 	std::string Documentation;
 	std::string Format(std::string_view wrapper, std::string nspace);
 };
+extern std::map<std::string, std::string> globalAliases;

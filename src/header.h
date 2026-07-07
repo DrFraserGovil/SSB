@@ -12,12 +12,13 @@ class
 	HeaderFile(fs::path file);
 
 	void RegisterClassNames(std::vector<std::string> &registry);
-	void GetFields(const std::vector<std::string> &registry);
+	size_t GetFields(const std::vector<std::string> &registry);
 	void PrepareOutput();
+
+	fs::path File;
 
   private:
 	void FindClasses();
 	std::vector<std::string> Lines;
-	fs::path File;
 	std::map<std::string, ClassDeclare> Classes;
 };

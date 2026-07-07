@@ -17,6 +17,7 @@ void Initialise(int argc, char **argv)
 		JSL::Log::Global().Level = ERROR;
 	}
 	JSL::Log::Global().ShowHeaders = false;
+	JSL::Log::Global().DebugColour = JSL::Display::Colour(60, 60, 130);
 	LOG(DEBUG) << "LSJ Initialised";
 }
 namespace fs = std::filesystem;
@@ -56,17 +57,20 @@ std::vector<fs::path> GetTargets()
 		exit(1);
 	}
 
-	std::string word = (out.size() > 1) ? "files " : "file ";
-	LOG(INFO) << "Processing " << word << JSL::String::stitch(out, ", ");
 	return out;
 }
 
+std::map<std::string, std::string> globalAliases = {};
 int main(int argc, char **argv)
 {
 	try
 	{
 		Initialise(argc, argv);
+
 		auto targets = GetTargets();
+		std::string word = (targets.size() > 1) ? "files " : "file ";
+		LOG(INFO) << "Processing " << word << JSL::String::stitch(targets, ", ");
+		// scan each file and scoop up the class definitions (but no more processing, as that requires the populated registry)
 		std::vector<HeaderFile> headers;
 		std::vector<std::string> registry;
 		for (auto f : targets)
@@ -75,9 +79,21 @@ int main(int argc, char **argv)
 			headers.back().RegisterClassNames(registry);
 		}
 
-		for (auto header : headers)
+		// Scan each class file in each header, picking up JSL-field declares.
+		//  The registry helps disambiguate nested classes; hence why it needed to be done first.
+		LOG(INFO) << " - Found " << registry.size() << " classes in " << headers.size() << " file" << (headers.size() > 1 ? "s" : "") << "\n"
+				  << "Beginning FieldScan";
+		size_t count = 0;
+		for (auto &header : headers)
 		{
-			header.GetFields(registry);
+			LOG(INFO) << " - In file " << header.File.string() << ":";
+			count += header.GetFields(registry);
+		}
+
+		LOG(INFO) << " - Found " << count << " valid JSL-fields.\nBeginning output writing";
+		// Loop over the now-validated output and write it all to file
+		for (auto &header : headers)
+		{
 			header.PrepareOutput();
 		}
 	}

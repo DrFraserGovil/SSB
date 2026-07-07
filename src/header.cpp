@@ -94,17 +94,19 @@ void HeaderFile::RegisterClassNames(std::vector<std::string> &registry)
 		registry.push_back(c.Name);
 	}
 }
-void HeaderFile::GetFields(const std::vector<std::string> &registry)
+size_t HeaderFile::GetFields(const std::vector<std::string> &registry)
 {
+	size_t c = 0;
 	for (auto &[name, obj] : Classes)
 	{
-		obj.GetFields(registry);
+		c += obj.GetFields(registry);
 	}
+	return c;
 }
 
 void HeaderFile::PrepareOutput()
 {
-	LOG(INFO) << File << "is writing";
+	LOG(INFO) << " - " << File.string() << " classes:";
 	std::map<std::string, std::string> tweaks;
 	for (auto &[name, obj] : Classes)
 	{
@@ -118,7 +120,7 @@ void HeaderFile::PrepareOutput()
 	if (!tweaks.empty())
 	{
 		auto hidden = File.parent_path() / ("." + File.filename().string() + ".bak");
-		LOG(WARN) << "Altering source code; backup can be found at " << hidden.string();
+		LOG(WARN) << "   = Altering source code; backup can be found at " << hidden.string();
 		if (std::filesystem::exists(hidden))
 		{
 			std::filesystem::remove(hidden);

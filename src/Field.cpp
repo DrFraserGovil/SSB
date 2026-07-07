@@ -38,6 +38,7 @@ void quote(std::string &wrapped)
 	if (wrapped[0] != '"') { wrapped = "\"" + wrapped; }
 	if (wrapped.back() != '"') { wrapped = wrapped + "\""; }
 }
+
 std::optional<std::string> JSLField::ProcessComments(std::vector<std::string> comments)
 {
 
@@ -103,6 +104,19 @@ std::optional<std::string> JSLField::ProcessComments(std::vector<std::string> co
 		}
 	}
 
+	auto copy = Aliases;
+	for (auto alias : copy)
+	{
+		if (globalAliases.contains(alias))
+		{
+			LOG(WARN) << "Duplicate Alias Warning!\n\tThe alias " << alias << "cannot be assigned to " << Identifier << ", as it has already been assigned to " << globalAliases[alias];
+			Aliases.erase(alias);
+		}
+		else
+		{
+			globalAliases[alias] = Identifier;
+		}
+	}
 	if (Aliases.empty())
 	{
 		return "No @aliases provided";
@@ -111,6 +125,7 @@ std::optional<std::string> JSLField::ProcessComments(std::vector<std::string> co
 	{
 		return "No documentation - @brief or @detail - provided";
 	}
+	std::reverse(brief.begin(), brief.end());
 	Documentation = JSL::String::stitch(brief, "\\n");
 	quote(Documentation);
 	return std::nullopt;

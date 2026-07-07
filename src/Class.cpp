@@ -58,11 +58,10 @@ ClassDeclare::ClassDeclare(std::smatch grab, std::filesystem::path host, std::ve
 	GetSelfMeta();
 }
 
-std::optional<std::pair<std::string, std::string>> jammedTemplate(std::string_view jam)
+std::optional<std::pair<std::string, std::string>> jammedTemplate(std::string_view jamIn)
 {
 	int level = 0;
-	jam = JSL::String::trim_view(jam);
-
+	auto jam = JSL::String::trim_view(jamIn);
 	for (size_t i = 0; i < jam.size(); ++i)
 	{
 		char ltr = jam[i];
@@ -96,10 +95,10 @@ std::regex fullCapture("^\\s*(.*)\\s+(\\w+)\\s*=\\s*(.*?)\\s*;(.*)$");
 std::regex simpleCapture("^\\s*(\\S.*)=\\s*(.*?)\\s*;(.*)$");
 std::regex nestedCapture(R"(^\s*(\S*)\s+(\S*)\s*;)");
 std::regex includeCapture("^\\s*#include \"(.*)\"");
-void ClassDeclare::GetFields(const std::vector<std::string> &possibleChildren)
+size_t ClassDeclare::GetFields(const std::vector<std::string> &possibleChildren)
 {
 
-	LOG(INFO) << JSL::Display::Colour(80, 180, 70) << "   = Scanning class " << Name << " [" << StartLine + 1 << "-" << EndLine + 1 << "]";
+	LOG(INFO) << "   = Scanning class " << Name << " [" << Host << ": " << StartLine + 1 << "-" << EndLine + 1 << "]";
 	std::vector<JSLField> suspectedFields;
 	std::vector<Nested> suspectedNesteds;
 	bool commented = false;
@@ -147,7 +146,8 @@ void ClassDeclare::GetFields(const std::vector<std::string> &possibleChildren)
 		if (!commented)
 		{
 			std::smatch groups;
-			if (std::regex_search(line, groups, simpleCapture))
+			std::smatch simplegroups;
+			if (std::regex_search(line, simplegroups, simpleCapture))
 			{
 				if (lineDanger && !haveWarned)
 				{
@@ -161,12 +161,12 @@ void ClassDeclare::GetFields(const std::vector<std::string> &possibleChildren)
 				}
 				else
 				{
-					std::string suspect = groups[1];
+					std::string suspect(simplegroups[1]);
 					auto jam = jammedTemplate(suspect);
 					if (jam)
 					{
 
-						suspectedFields.emplace_back(jam.value().first, jam.value().second, groups[2], i);
+						suspectedFields.emplace_back(jam.value().first, jam.value().second, simplegroups[2], i);
 					}
 				}
 			}
@@ -227,6 +227,7 @@ void ClassDeclare::GetFields(const std::vector<std::string> &possibleChildren)
 			}
 		}
 	}
+	return Fields.size();
 }
 
 std::optional<std::string> ClassDeclare::RejectFields(JSLField &suspected)
@@ -358,21 +359,28 @@ std::optional<std::string> ClassDeclare::WriteToFile()
 	auto data = Format(Settings.Strings.TemplateName, Settings.Strings.ObjectName);
 
 	bool requiresOverwrite = true;
+	std::string write = "Writing";
 	if (std::filesystem::exists(GenFile))
 	{
 		auto oldData = JSL::IO::getFile(GenFile);
 		requiresOverwrite = !(data == oldData);
+		write = "Overwriting";
 	}
 
+	std::string msg;
+	auto col = JSL::Display::DefaultColour();
 	if (requiresOverwrite)
 	{
-		LOG(DEBUG) << "Writing output to " << GenFile;
+		msg = write + " file ";
 		JSL::IO::writeString(GenFile, data);
+		col = JSL::Display::Yellow();
 	}
 	else
 	{
-		LOG(DEBUG) << "No change to data in " << GenFile;
+		msg = "No change in ";
+		col = JSL::Display::Colour(80, 80, 80);
 	}
+	LOG(INFO) << col << "   = " << msg << GenFile.string();
 
 	bool sourceTweak = !(IsPublic && IsNested && HasInclude);
 	if (sourceTweak)

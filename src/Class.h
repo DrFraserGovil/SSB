@@ -19,7 +19,7 @@ class ClassDeclare
 
 	ClassDeclare(std::smatch grab, std::filesystem::path host, std::vector<std::string> &lines, int linestart, int lineend);
 	ClassDeclare() : Lines({}) { IsJSLConfigurable = false; };
-	void GetFields(const std::vector<std::string> &possibleChildren);
+	size_t GetFields(const std::vector<std::string> &possibleChildren);
 
 	std::optional<std::string> WriteToFile();
 
