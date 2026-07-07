@@ -5,17 +5,11 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-| LSJ Version | Supported JSL Versions |
-|-------------|------------------------|
-| 1.0.0       | 3.0.0 -> 3.0.3         |
-|             |                        |
-
-
-## [1.0.0] 2026-07-07 
+## [Unreleased] 2026-07-07 
 
 This is a complete overhaul of the pre-release versions that were attempted. 1.0.0 is a complete rewrite of the original test scripts.
 
-
+* Added robust install and syntax guidelines to the readme
 * In-place reflection generator with #inlcude-s to the ``.autogen`` files which contain the necessary 
 * Robust parsing of a limited 'sane' subset of C++
 * Comment parsing for metadata allocation

@@ -9,6 +9,15 @@ The field list for each class is written to a file (usually ``targetfile.classna
 
 The LSJ is designed to allow a user to integrate it into their compilation routine, with the source code for the parsers being a valid C++ file. This means an LSP can track newly added symbols without needing to wait for a compilaton call, or having a dynamic file watcher.
 
+### Compatibility 
+
+Every effort will be made to ensure that LSJ and JSL remain compatible with each other as they are updated side-by-side. The following table indicates the compatibilities which have been tested and validated.
+
+| LSJ Version | Supported JSL Versions |
+|-------------|------------------------|
+| 1.0.0       | 3.0.0 -> 3.0.3         |
+
+
 ## Install
 
 This tool can be acquired in the following way:
