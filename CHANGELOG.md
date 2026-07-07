@@ -5,7 +5,7 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] 2026-07-07 
+## [1.0.0] 2026-07-07 
 
 This is a complete overhaul of the pre-release versions that were attempted. 1.0.0 is a complete rewrite of the original test scripts.
 
