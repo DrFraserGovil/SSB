@@ -26,7 +26,7 @@ Compiling this requires either a copy of the JSL library to be on your $PATH, or
 Basic usage:
 
 ```
-./lsj target1.h target2.h ... 
+./lsj target*h target2.h ... 
 ```
 
 When multiple files are passed to a single instance, they are assumed to be associated with the same project, and so errors and warnings will surface if aliases are shared between variables across files. 
@@ -114,16 +114,19 @@ class Object : public JSL::Interface::Aggregator<Object>
 
 ### Notes
 
-1. Members which do not declare a ``@alias`` and ``@brief`` field **will be omitted** from the reflection pipeline; this allows some 'static' members which cannot be altered.
-2. Metadata for a class or a field must be declared in lines directly above the element they are referring to; blank lines sever the connection. 
-2. The ``!`` is optional (but recommended as it allows automated inclusion of the ``@brief`` and ``@detail`` field with doxygen, and doxygen-aware editors)
-3. The ``@name`` field is optional; if absent the typename is used (for classes) or the symbol name (for member fields)
-4. Nested Aggregators are automatically included, as long as the aggregator is declared within the list of files supplied to the LSJ
-5. Typenames and default values are copied verbatim; there is no checking if they are actually valid. LSJ does not convert invalid C++ classes to valid ones.
-6. Running with the ``--fix`` flag will allow the following errors to be corrected in the source file
-  * Missing 'public' from inheritance
-  * Missing CRTP (i.e. Aggregator -> Aggregator<Object>)
-7. Duplicate aliases will be omitted (with an error message) from all subsequent fields. If this results in a field having no valid aliases, it will be omitted from the reflection output. Duplicate aliases are tracked across all files. 
-8. Doxygen fields not associated with member variables (i.e. ``@return`` or ``@param``) will cause the member to be ignored.
-9. We do *not* prevent the capture of non-modifiable fields (i.e. static or const); your compiler will shout at you instead.
+* We limit the parsing to a 'sane subset' of C++. Some files may be valid C++, but are not recognised by our syntax. Known limitations are:
+    * The class declaration must take place on a single line (bracing style is ignored)
+    * Multiline comments must place their begin and end tokens on a blank line in order to be properly processed
+* Members which do not declare a ``@alias`` and ``@brief`` field **will be omitted** from the reflection pipeline; this allows some 'static' members which cannot be altered.
+* Metadata for a class or a field must be declared in lines directly above the element they are referring to; blank lines sever the connection. 
+* The ``!`` is optional (but recommended as it allows automated inclusion of the ``@brief`` and ``@detail`` field with doxygen, and doxygen-aware editors)
+* The ``@name`` field is optional; if absent the typename is used (for classes) or the symbol name (for member fields)
+* Nested Aggregators are automatically included, as long as the aggregator is declared within the list of files supplied to the LSJ
+* Typenames and default values are copied verbatim; there is no checking if they are actually valid. LSJ does not convert invalid C++ classes to valid ones.
+* Running with the ``--fix`` flag will allow the following errors to be corrected in the source file
+    * Missing 'public' from inheritance
+    * Missing CRTP (i.e. Aggregator -> Aggregator<Object>)
+* Duplicate aliases will be omitted (with an error message) from all subsequent fields. If this results in a field having no valid aliases, it will be omitted from the reflection output. Duplicate aliases are tracked across all files. 
+* Doxygen fields not associated with member variables (i.e. ``@return`` or ``@param``) will cause the member to be ignored.
+* We do *not* prevent the capture of non-modifiable fields (i.e. static or const); your compiler will shout at you instead.
 
