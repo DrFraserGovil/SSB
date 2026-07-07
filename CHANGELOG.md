@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 | LSJ Version | Supported JSL Versions |
 |-------------|------------------------|
-| 1.0.0       | 3.0.0 -> 3.0.2         |
+| 1.0.0       | 3.0.0 -> 3.0.3         |
 |             |                        |
 
 

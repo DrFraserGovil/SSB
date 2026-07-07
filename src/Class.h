@@ -33,6 +33,7 @@ class ClassDeclare
 	std::vector<Nested> SubGroup;
 	std::optional<std::string> RejectFields(JSLField &suspected);
 	std::optional<std::string> RejectNested(Nested &suspected, const std::vector<std::string> &registry);
+	std::map<std::string, std::string> Command;
 	std::vector<std::string> CaptureComments(int line);
 	void GetSelfMeta();
 	std::string IdealForm();

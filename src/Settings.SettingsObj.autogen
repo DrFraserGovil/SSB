@@ -6,8 +6,10 @@ template<typename Wrapper>
 void FieldList(Wrapper &&W)
 {
 	Name = "SettingsObj";
-	W(JSL::Interface::Field<bool>(Verbose, "Verbose", {"v", "verbose"}, false, "Verbose"));
+	HelpData.Commands["[filename]"] = "A file to be acted upon";
+	W(JSL::Interface::Field<bool>(Verbose, "Verbose", {"v", "verbose"}, false, "Verbose mode; prints diagnostic information"));
 	W(JSL::Interface::Field<bool>(Quiet, "Quiet", {"q"}, false, "Quiet mode"));
+	W(JSL::Interface::Field<std::vector<std::string>>(extensions, "extensions", {"header"}, {".h", ".hpp"}, "File extensions which are used as signfiers of header files during validation checks"));
 	W(Modes);
 	W(Strings);
 }

@@ -37,7 +37,7 @@ ClassDeclare::ClassDeclare(std::smatch grab, std::filesystem::path host, std::ve
 	}
 
 	GenFile = Host.parent_path() / (Host.stem().string() + "." + Name + ".dat");
-	GenFile.replace_extension(Settings.Strings.Suffix);
+	GenFile.replace_extension(Settings.Strings.FileExtension);
 	IsJSLConfigurable = (IsPublic && IsNested) || Settings.Modes.ActiveFix;
 	bool alreadyHasList = hasFieldList(lines, linestart, lineend);
 	IsJSLConfigurable = IsJSLConfigurable && !alreadyHasList;
@@ -247,6 +247,7 @@ std::optional<std::string> ClassDeclare::RejectNested(Nested &suspected, const s
 }
 
 std::regex nameCapture("@name\\s+(\\S.*)");
+std::regex commandCapture("@command\\s+(\\S*)\\s+(.*)");
 void ClassDeclare::GetSelfMeta()
 {
 	auto comments = CaptureComments(StartLine);
@@ -257,6 +258,10 @@ void ClassDeclare::GetSelfMeta()
 		if (std::regex_search(cmt, groups, nameCapture))
 		{
 			DisplayName = groups[1];
+		}
+		if (std::regex_search(cmt, groups, commandCapture))
+		{
+			Command[groups[1]] = groups[2];
 		}
 	}
 }
@@ -339,6 +344,11 @@ std::string ClassDeclare::Format(std::string tname, std::string iname)
 	   << "void FieldList(" << tname << " &&" << iname << ")\n"
 	   << "{\n"
 	   << "\tName = \"" << DisplayName << "\";";
+
+	for (auto [cmd, desc] : Command)
+	{
+		os << "\n\tHelpData.Commands[\"" << cmd << "\"] = \"" << desc << "\";";
+	}
 
 	for (auto &field : Fields)
 	{
